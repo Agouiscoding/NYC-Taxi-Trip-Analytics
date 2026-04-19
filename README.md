@@ -1,6 +1,26 @@
 # NYC-Taxi-Trip-Analytics
 A scalable big data project for NYC taxi trip analytics and demand forecasting using PySpark, Parquet, and spatial-temporal analysis.
 
+## 目前先把代码运行起来，后期有时间还可以做：
+（不清楚往年项目和打分情况，以及别的组大概做成什么样，所以这部分待定）<br>
+1.数据规模从2023-2024扩充到2009-2024<br>
+2.配置hadoop分布式计算，原始数据进 HDFS，Spark 从 HDFS 读，中间结果写回 HDFS 或对象存储（主要工作是在改config/config.py的文件路径）<br>
+3.配置mongodb，对处理后的结果做持久化存储，不是存原始 900 多万条 trip 明细<br>
+4.引入spark stream，把历史数据“伪装成流”（把历史 taxi 数据按时间切成很多小文件，每隔一段时间放一个文件进去），让 Spark 监听这个目录，实时 zone demand monitor和hotspot ranking，相应的dashboard可以动态实时刷新<br>
+5. Kafka，每条新 trip 作为一条事件写进 Kafka topic<br>
+   Lambda，batch path：每天重算全年 zone-hour 表，speed path：实时更新最近 1 小时热点，serving：dashboard 同时展示历史趋势 + 当前热点<br>
+6.引入Vector DB，做“自然语言查询 / 问答助手”（把项目生成的分析结果、摘要、热点结论、forecast summaries 变成文本，再做 embedding，存进 vector DB，然后用户可以问：“What were the busiest zones on weekday mornings?”等系统去向量检索最相关的分析摘要，再返回答案。）<br>
+
+
+## 最终：
+1.raw data 用 parquet / HDFS，做分布式数据存储 + 计算<br>
+2.analytics 用 Spark（这是目前在做的事）<br>
+3.MongoDB 存“最终查询和展示要用的数据”，做 dashboard 或简单 API，MongoDB 很适合查这些聚合结果<br>
+4.引入spark stream实现dashboard动态刷新<br>
+5.引入Vector DB做“问答助手”<br>
+
+## 关于项目迭代操作的代价：https://docs.google.com/document/d/1EIMlaebw0aErON3z__H_27MCdqPioUx8vskZsa-7gv4/edit?usp=sharing
+
 
 # Reminder
 
