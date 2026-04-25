@@ -197,7 +197,7 @@ def write_report_file(content: str, output_path: str) -> None:
 #     return df, report
 
 def clean_trips(df: DataFrame, zones_df: DataFrame):
-    DEBUG = True
+    DEBUG = False
     if DEBUG:
         df = df.sample(0.01)
 
