@@ -559,11 +559,263 @@ speed = trip_distance / trip_duration
 
 
 
+````
 
 # Stage5 - Forecasting
 
+## 5.1 本层职责
 
+本阶段负责完成 NYC Taxi demand forecasting，预测不同 pickup zone 在不同日期、不同时段的出租车需求量。
 
+预测粒度：
+
+```text
+pickup zone + date + hour
+```
+
+预测目标：
+
+```text
+trip_count
+```
+
+---
+
+## 5.2 提交文件说明
+
+本阶段上传到 GitHub 的文件只有：
+
+```text
+src/forecasting/prepare_training_data.py
+src/forecasting/train_model.py
+src/forecasting/evaluate_model.py
+
+outputs/figures/actual_vs_predicted_scatter.png
+outputs/figures/actual_vs_predicted_monthly_curve.png
+outputs/figures/prediction_error_distribution.png
+outputs/figures/model_comparison.png
+```
+
+不上传 CSV 文件和模型文件，因为文件较大或可由脚本重新生成。
+
+---
+
+## 5.3 输入数据
+
+本阶段依赖 Part 3 输出：
+
+```text
+data/processed/zone_hour_features/
+```
+
+该表是一行一个：
+
+```text
+pickup zone + pickup date + hour
+```
+
+主要使用字段包括：
+
+```text
+PULocationID
+pickup_zone
+pickup_borough
+pickup_date
+year
+month
+day
+day_of_week
+is_weekend
+hour
+trip_count
+avg_trip_distance
+avg_trip_duration_min
+avg_fare_amount
+avg_total_amount
+avg_passenger_count
+avg_speed_mph
+credit_card_share
+cash_share
+```
+
+---
+
+## 5.4 依赖库
+
+```bash
+pip install pyspark pandas numpy scikit-learn matplotlib joblib
+```
+
+---
+
+## 5.5 运行顺序
+
+```bash
+python src/forecasting/prepare_training_data.py
+python src/forecasting/train_model.py
+python src/forecasting/evaluate_model.py
+```
+
+---
+
+## 5.6 脚本功能
+
+### prepare_training_data.py
+
+功能：
+
+```text
+1. 读取 data/processed/zone_hour_features/
+2. 构造 lag 和 rolling 特征
+3. 随机划分 80% training set 和 20% evaluation set
+4. 输出机器学习可用 CSV
+```
+
+生成但不上传：
+
+```text
+data/processed/forecasting/training_data_full.csv
+data/processed/forecasting/training_data_train.csv
+data/processed/forecasting/training_data_eval.csv
+data/processed/forecasting/train_eval_split_info.csv
+```
+
+---
+
+### train_model.py
+
+功能：
+
+```text
+1. 读取 training_data_train.csv
+2. 训练 Linear Regression、Random Forest、Gradient Boosting
+3. 比较 MAE、RMSE、R2
+4. 自动选择 RMSE 最低的模型
+5. 保存模型文件
+```
+
+生成但不上传：
+
+```text
+outputs/models/linear_regression_model.pkl
+outputs/models/random_forest_model.pkl
+outputs/models/gradient_boosting_model.pkl
+outputs/models/best_model.pkl
+outputs/tables/model_comparison.csv
+```
+
+---
+
+### evaluate_model.py
+
+功能：
+
+```text
+1. 读取 training_data_eval.csv
+2. 加载已训练模型
+3. 在 evaluation set 上预测
+4. 输出最终 metrics
+5. 输出 prediction table
+6. 输出图片
+7. 输出给 Part 6 使用的 CSV
+```
+
+生成但不上传：
+
+```text
+outputs/tables/model_evaluation_metrics.csv
+outputs/predictions/forecast_predictions.csv
+outputs/predictions/plot_actual_vs_predicted_hourly.csv
+outputs/predictions/plot_actual_vs_predicted_monthly.csv
+outputs/predictions/plot_error_distribution.csv
+outputs/predictions/plot_model_comparison.csv
+```
+
+---
+
+## 5.7 Part 6 需要使用的 CSV
+
+Part 6 如果需要重新绘图、调整 dashboard 样式，或展示预测结果表，直接使用以下文件：
+
+```text
+outputs/predictions/forecast_predictions.csv
+```
+
+用途：完整的 zone-hour 预测结果表，包含每条记录的真实 demand、预测 demand、prediction error 和 absolute error。适合 Part 6 做预测结果表格、筛选、地图或 dashboard 明细展示。
+
+```text
+outputs/predictions/plot_actual_vs_predicted_hourly.csv
+```
+
+用途：zone-hour 粒度的 actual vs predicted demand，可用于绘制 hourly actual vs predicted 图。
+
+```text
+outputs/predictions/plot_actual_vs_predicted_monthly.csv
+```
+
+用途：按月份聚合后的 actual vs predicted demand trend，可用于绘制 monthly trend 图。
+
+```text
+outputs/predictions/plot_error_distribution.csv
+```
+
+用途：prediction error distribution，可用于绘制误差分布图。
+
+```text
+outputs/predictions/plot_model_comparison.csv
+```
+
+用途：三个模型的 MAE、RMSE、R2 对比，可用于绘制模型比较图。
+
+---
+
+## 5.8 模型说明
+
+本阶段使用三个 sklearn 回归模型：
+
+```text
+Linear Regression
+Random Forest Regressor
+Gradient Boosting Regressor
+```
+
+最佳模型选择标准：
+
+```text
+RMSE 最低
+```
+
+通常 Random Forest 表现最好，因为 taxi demand 与时间、区域、历史需求之间存在非线性关系。
+
+---
+
+## 5.9 图片输出
+
+上传到 GitHub 的图片包括：
+
+```text
+outputs/figures/actual_vs_predicted_scatter.png
+```
+
+真实值与预测值散点图。
+
+```text
+outputs/figures/actual_vs_predicted_monthly_curve.png
+```
+
+按月份聚合后的 actual vs predicted demand 趋势图。
+
+```text
+outputs/figures/prediction_error_distribution.png
+```
+
+预测误差分布图。
+
+```text
+outputs/figures/model_comparison.png
+```
+
+三个模型的 RMSE 对比图。
 
 
 # Stage6 - Visualization
