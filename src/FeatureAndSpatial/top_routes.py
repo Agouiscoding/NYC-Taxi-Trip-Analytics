@@ -279,8 +279,8 @@ def main() -> None:
     print("\n===== top_routes schema =====")
     top_routes_df.printSchema()
 
-    print("\n===== top_routes preview =====")
-    top_routes_df.orderBy("route_rank").show(30, truncate=False)
+    # print("\n===== top_routes preview =====")
+    # top_routes_df.orderBy("route_rank").show(30, truncate=False)
 
     top_routes_df.write.mode("overwrite").parquet(TOP_ROUTES_PATH)
     print(f"\ntop_routes saved to: {TOP_ROUTES_PATH}")

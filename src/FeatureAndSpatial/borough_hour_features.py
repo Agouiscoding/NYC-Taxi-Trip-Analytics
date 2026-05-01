@@ -216,8 +216,8 @@ def main() -> None:
     print("\n===== borough_hour_features schema =====")
     borough_hour_df.printSchema()
 
-    print("\n===== borough_hour_features preview =====")
-    borough_hour_df.show(30, truncate=False)
+    # print("\n===== borough_hour_features preview =====")
+    # borough_hour_df.show(30, truncate=False)
 
     borough_hour_df.write.mode("overwrite").parquet(BOROUGH_HOUR_FEATURES_PATH)
     print(f"\nborough_hour_features saved to: {BOROUGH_HOUR_FEATURES_PATH}")

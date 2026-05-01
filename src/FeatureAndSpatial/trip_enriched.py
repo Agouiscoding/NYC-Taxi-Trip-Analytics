@@ -285,8 +285,8 @@ def main() -> None:
     print("\n===== trip_enriched schema =====")
     trip_enriched_df.printSchema()
 
-    print("\n===== trip_enriched preview =====")
-    trip_enriched_df.show(30, truncate=False)
+    # print("\n===== trip_enriched preview =====")
+    # trip_enriched_df.show(30, truncate=False)
 
     trip_enriched_df.write.mode("overwrite").parquet(TRIP_ENRICHED_PATH)
 

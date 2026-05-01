@@ -228,8 +228,8 @@ def main() -> None:
     print("\n===== zone_daily_features schema =====")
     zone_daily_df.printSchema()
 
-    print("\n===== zone_daily_features preview =====")
-    zone_daily_df.show(30, truncate=False)
+    # print("\n===== zone_daily_features preview =====")
+    # zone_daily_df.show(30, truncate=False)
 
     zone_daily_df.write.mode("overwrite").parquet(ZONE_DAILY_FEATURES_PATH)
     print(f"\nzone_daily_features saved to: {ZONE_DAILY_FEATURES_PATH}")

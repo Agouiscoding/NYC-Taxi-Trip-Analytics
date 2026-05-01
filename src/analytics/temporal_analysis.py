@@ -419,7 +419,7 @@ def main() -> None:
         table_df.show(20, truncate=False)
         write_output_table(table_df, table_name, args.write_csv)
 
-    write_stage4_readme(args.write_csv, args.top_n)
+    # write_stage4_readme(args.write_csv, args.top_n)
 
     spark.stop()
     print("\nStage 4 Temporal + Analytics completed successfully.")
