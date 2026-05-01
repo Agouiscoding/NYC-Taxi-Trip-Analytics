@@ -137,6 +137,17 @@ def remove_invalid_location_ids(df: DataFrame, zones_df: DataFrame) -> DataFrame
         .filter(F.col(DROPOFF_ID_COL).isin(valid_zone_ids))
     )
 
+def remove_out_of_target_date_range(df: DataFrame) -> DataFrame:
+    """
+    Keep only trips whose pickup timestamp is within the target analysis window.
+    Target window: 2021-01-01 inclusive to 2025-01-01 exclusive.
+    This keeps 2021, 2022, 2023, and 2024 data only.
+    """
+    return df.filter(
+        (F.col("pickup_ts") >= F.lit("2021-01-01 00:00:00")) &
+        (F.col("pickup_ts") < F.lit("2025-01-01 00:00:00"))
+    )
+
 
 ## 和stage4不同 可能要考虑是不是不用去重
 def remove_duplicates(df: DataFrame) -> DataFrame:
@@ -219,6 +230,22 @@ def write_report_file(content: str, output_path: str) -> None:
 
 #     return df, report
 
+# def clean_trips(df: DataFrame, zones_df: DataFrame):
+#     DEBUG = False
+
+#     if DEBUG:
+#         df = df.sample(0.01)
+
+#     df = select_needed_columns(df)
+#     df = standardize_columns(df)
+#     df = remove_null_and_time_invalid(df)
+#     df = remove_numeric_invalid(df)
+#     df = remove_invalid_location_ids(df, zones_df)
+#     df = remove_duplicates(df)
+
+#     report = build_cleaning_report()
+#     return df, report
+
 def clean_trips(df: DataFrame, zones_df: DataFrame):
     DEBUG = False
 
@@ -228,6 +255,9 @@ def clean_trips(df: DataFrame, zones_df: DataFrame):
     df = select_needed_columns(df)
     df = standardize_columns(df)
     df = remove_null_and_time_invalid(df)
+
+    df = remove_out_of_target_date_range(df)
+
     df = remove_numeric_invalid(df)
     df = remove_invalid_location_ids(df, zones_df)
     df = remove_duplicates(df)

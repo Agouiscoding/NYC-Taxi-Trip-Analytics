@@ -269,6 +269,29 @@ def export_sample_csv(routes_df: DataFrame) -> None:
         print(f"\nSkipping sample CSV export: {e}")
 
 
+def export_full_csv(routes_df: DataFrame) -> None:
+    """
+    Export the full top_routes table as CSV for D3 / frontend use.
+
+    Note:
+    Spark writes CSV as a directory containing part-*.csv files,
+    not as a single CSV file by default.
+    """
+    csv_output_path = TABLES_DIR / "top_routes_csv"
+
+    TABLES_DIR.mkdir(parents=True, exist_ok=True)
+
+    (
+        routes_df
+        .write
+        .mode("overwrite")
+        .option("header", True)
+        .csv(str(csv_output_path))
+    )
+
+    print(f"\nFull CSV saved to: {csv_output_path}")
+
+
 def main() -> None:
     spark = create_spark_session(FEATURE_APP_NAME)
 
@@ -285,7 +308,9 @@ def main() -> None:
     top_routes_df.write.mode("overwrite").parquet(TOP_ROUTES_PATH)
     print(f"\ntop_routes saved to: {TOP_ROUTES_PATH}")
 
-    export_sample_csv(top_routes_df)
+    # export_sample_csv(top_routes_df)
+    top_routes_export_df = spark.read.parquet(TOP_ROUTES_PATH)
+    export_full_csv(top_routes_export_df)
 
     spark.stop()
 

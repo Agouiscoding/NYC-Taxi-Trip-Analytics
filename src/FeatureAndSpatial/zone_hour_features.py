@@ -290,7 +290,8 @@ def main() -> None:
     zone_hour_df.write.mode("overwrite").parquet(ZONE_HOUR_FEATURES_PATH)
     print(f"\nzone_hour_features saved to: {ZONE_HOUR_FEATURES_PATH}")
 
-    export_sample_csv(zone_hour_df)
+    zone_hour_export_df = spark.read.parquet(ZONE_HOUR_FEATURES_PATH)
+    export_full_csv(zone_hour_export_df)
 
     spark.stop()
 

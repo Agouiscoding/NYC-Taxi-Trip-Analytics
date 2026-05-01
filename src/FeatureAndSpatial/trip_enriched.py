@@ -274,6 +274,29 @@ def export_sample_csv(trip_enriched_df: DataFrame) -> None:
         print(f"\nSkipping sample CSV export: {e}")
 
 
+def export_full_csv(trip_enriched_df: DataFrame) -> None:
+    """
+    Export the full trip_enriched table as CSV for D3 / frontend use.
+
+    Note:
+    Spark writes CSV as a directory containing part-*.csv files,
+    not as a single CSV file by default.
+    """
+    csv_output_path = TABLES_DIR / "trip_enriched_csv"
+
+    TABLES_DIR.mkdir(parents=True, exist_ok=True)
+
+    (
+        trip_enriched_df
+        .write
+        .mode("overwrite")
+        .option("header", True)
+        .csv(str(csv_output_path))
+    )
+
+    print(f"\nFull CSV saved to: {csv_output_path}")
+
+
 def main() -> None:
     spark = create_spark_session(FEATURE_APP_NAME)
 
@@ -292,7 +315,8 @@ def main() -> None:
 
     print(f"\ntrip_enriched saved to: {TRIP_ENRICHED_PATH}")
 
-    export_sample_csv(trip_enriched_df)
+    trip_enriched_export_df = spark.read.parquet(TRIP_ENRICHED_PATH)
+    export_sample_csv(trip_enriched_export_df)
 
     spark.stop()
 
