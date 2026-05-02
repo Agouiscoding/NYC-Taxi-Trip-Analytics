@@ -62,7 +62,7 @@ C:/Users/*/AppData/Local/Temp/
 # ================================
 # Data files
 # ================================
-data/raw/
+data/raw/*
 data/processed/
 
 # If you want to keep directory placeholders later, use:
@@ -72,9 +72,17 @@ data/processed/
 # ================================
 # Output files
 # ================================
-outputs/
+outputs/*
 *.csv
 *.parquet
+
+# Selected raw TLC parquet files that are intentionally versioned.
+# Keep these exceptions after the global *.parquet ignore rule.
+!data/raw/
+!data/raw/yellow_tripdata_2021-*.parquet
+!data/raw/yellow_tripdata_2022-*.parquet
+!data/raw/yellow_tripdata_2023-*.parquet
+!data/raw/yellow_tripdata_2024-*.parquet
 
 # ================================
 # Frontend / Node
