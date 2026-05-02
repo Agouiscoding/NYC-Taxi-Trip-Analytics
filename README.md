@@ -273,7 +273,282 @@ At this stage, the data ingestion layer has achieved the following:
 
 
 
-# Stage3 - Feature 
+# Stage 3 - Feature Engineering
+
+## 3.1 本层职责
+
+本阶段负责在清洗后的 taxi trip 数据基础上，进一步构造可用于分析、可视化和建模的标准中间表。
+
+主要包括：
+
+* 空间信息补充：通过 zone lookup 表补充 pickup / dropoff zone 与 borough 信息
+* 时间特征构造：提取 hour、date、weekday、weekend 等时间维度
+* Route 特征构造：生成 route_key 与 route_name
+* 多粒度聚合：构建 zone-hour、zone-day、borough-hour、route 等分析表
+* 输出标准中间表，供后续 analytics、visualization 和 forecasting 使用
+* 修改了load_raw_data中的creatsparksession 申明更多空间给spark使用
+
+---
+
+## 3.2 数据处理 Pipeline
+
+### 完整执行顺序
+
+```text
+Step 1: Ingestion
+    python src/ingestion/load_raw_data.py
+
+Step 2: Cleaning
+    python src/cleaning/clean_trips.py
+
+Step 3: Feature Engineering
+    python src/FeaturesAndSpatial/trip_enriched.py
+    python src/FeaturesAndSpatial/zone_hour_features.py
+    python src/FeaturesAndSpatial/zone_daily_features.py
+    python src/FeaturesAndSpatial/borough_hour_features.py
+    python src/FeaturesAndSpatial/top_routes.py
+````
+
+---
+
+## 3.3 输出数据表说明
+
+Stage 3 会生成以下标准中间表：
+
+| 表名                      | 粒度                  | 主要用途                                          |
+| ----------------------- | ------------------- | --------------------------------------------- |
+| `trip_enriched`         | 一行 = 一条 taxi trip   | 明细增强、空间补充、时间特征、route 构造                       |
+| `zone_hour_features`    | 一行 = zone + 日期 + 小时 | 核心分析表，可用于 analytics、forecasting、visualization |
+| `zone_daily_features`   | 一行 = zone + 日期      | 日趋势分析、day-level forecasting、dashboard         |
+| `borough_hour_features` | 一行 = borough + 小时   | 宏观趋势分析、borough-level dashboard                |
+| `top_routes`            | 一行 = 一条 route       | 热门路线分析、route-level summary                    |
+
+---
+
+## 3.4 数据表字段说明
+
+### 3.4.1 `trip_enriched`：明细增强表
+
+#### 粒度
+
+**一行 = 一条 taxi trip**
+
+#### 作用
+
+`trip_enriched` 是在清洗后的 trip 明细数据基础上构造的增强表，主要用于提升数据可读性，并为后续聚合表提供统一输入。
+
+主要功能包括：
+
+* 补充 pickup / dropoff zone name
+* 补充 pickup / dropoff borough
+* 拆分时间特征
+* 构造 route 特征
+
+#### 原始字段
+
+| 字段                      | 含义            |
+| ----------------------- | ------------- |
+| `VendorID`              | 供应商           |
+| `tpep_pickup_datetime`  | 上车时间          |
+| `tpep_dropoff_datetime` | 下车时间          |
+| `trip_distance`         | 行驶距离，单位为 mile |
+| `fare_amount`           | 基础费用          |
+| `total_amount`          | 总费用           |
+| `passenger_count`       | 乘客数           |
+| `PULocationID`          | 上车区域 ID       |
+| `DOLocationID`          | 下车区域 ID       |
+
+#### 新增时间特征
+
+| 字段             | 含义         |
+| -------------- | ---------- |
+| `pickup_ts`    | 标准化后的上车时间戳 |
+| `pickup_date`  | 上车日期       |
+| `hour`         | 上车小时       |
+| `day_of_week`  | 星期，数值形式    |
+| `weekday_name` | 星期名称       |
+| `is_weekend`   | 是否为周末      |
+| `year_month`   | 年-月        |
+
+#### 新增空间特征
+
+| 字段                | 含义           |
+| ----------------- | ------------ |
+| `pickup_zone`     | 上车区域名称       |
+| `pickup_borough`  | 上车所属 borough |
+| `dropoff_zone`    | 下车区域名称       |
+| `dropoff_borough` | 下车所属 borough |
+
+#### 新增 route 特征
+
+| 字段           | 含义                                      |
+| ------------ | --------------------------------------- |
+| `route_key`  | 路线唯一标识，格式为 `PULocationID_DOLocationID`  |
+| `route_name` | 可读路线名称，格式为 `pickup_zone → dropoff_zone` |
+
+---
+
+### 3.4.2 `zone_hour_features`：核心分析表
+
+#### 粒度
+
+**一行 = zone + 日期 + 小时**
+
+#### 为什么重要
+
+`zone_hour_features` 是本项目最核心的中间表之一。它将 trip-level 明细数据聚合到 zone-hour 粒度，可以作为以下任务的统一输入：
+
+* demand analytics
+* time-series forecasting
+* dashboard visualization
+* spatial-temporal pattern analysis
+
+#### 维度字段
+
+| 字段               | 含义           |
+| ---------------- | ------------ |
+| `PULocationID`   | 上车区域 ID      |
+| `pickup_zone`    | 上车区域名称       |
+| `pickup_borough` | 上车所属 borough |
+| `pickup_date`    | 上车日期         |
+| `hour`           | 上车小时         |
+
+#### 指标字段
+
+| 字段                      | 含义                     |
+| ----------------------- | ---------------------- |
+| `trip_count`            | 订单数，核心 demand 指标       |
+| `total_revenue`         | 总收入                    |
+| `avg_fare_amount`       | 平均基础费用                 |
+| `avg_trip_distance`     | 平均行驶距离                 |
+| `avg_trip_duration_min` | 平均行程时长，单位为分钟           |
+| `total_passenger_count` | 总乘客数                   |
+| `avg_speed_mph`         | 平均速度，单位为 mile per hour |
+
+#### 支付方式相关字段
+
+| 字段                       | 含义       |
+| ------------------------ | -------- |
+| `credit_card_trip_count` | 信用卡支付订单数 |
+| `cash_trip_count`        | 现金支付订单数  |
+| `credit_card_share`      | 信用卡支付占比  |
+| `cash_share`             | 现金支付占比   |
+
+---
+
+### 3.4.3 `zone_daily_features`
+
+#### 粒度
+
+**一行 = zone + 日期**
+
+#### 来源
+
+`zone_daily_features` 由 `zone_hour_features` 进一步聚合得到。
+
+#### 用途
+
+该表适合用于更高层级的日趋势分析，例如：
+
+* daily demand trend analysis
+* day-level forecasting
+* dashboard summary
+* zone-level daily comparison
+
+---
+
+### 3.4.4 `borough_hour_features`
+
+#### 粒度
+
+**一行 = borough + 小时**
+
+#### 用途
+
+`borough_hour_features` 用于观察 borough 层面的宏观出行模式，例如：
+
+* Manhattan vs Queens demand comparison
+* hourly demand pattern by borough
+* dashboard overview
+* city-level summary analysis
+
+---
+
+### 3.4.5 `top_routes`
+
+#### 粒度
+
+**一行 = 一条 route**
+
+#### 用途
+
+`top_routes` 用于分析高频出行路线及其收入、距离和时长特征。
+
+#### 核心字段
+
+| 字段                      | 含义                 |
+| ----------------------- | ------------------ |
+| `route_key`             | 路线唯一标识             |
+| `route_name`            | 可读路线名称，格式为 `A → B` |
+| `trip_count`            | 订单数                |
+| `total_revenue`         | 总收入                |
+| `avg_trip_distance`     | 平均行驶距离             |
+| `avg_trip_duration_min` | 平均行程时长             |
+
+---
+
+## 3.5 数据口径说明
+
+### 3.5.1 Demand 定义
+
+本项目中所有 demand 均定义为：
+
+> pickup demand
+
+也就是说，订单需求统一按照上车区域进行统计。
+
+---
+
+### 3.5.2 收入口径
+
+`total_amount` 表示 NYC Taxi 原始记录中的总费用字段。
+
+需要注意：
+
+* `total_amount` 可用于分析 trip-level revenue pattern
+* 但它不完全等同于实际司机收入
+* 现金支付场景下 tip 信息可能不完整
+
+---
+
+### 3.5.3 Payment Share 口径
+
+`credit_card_share` 和 `cash_share` 分别表示信用卡与现金支付订单占比。
+
+需要注意：
+
+* 二者之和不一定等于 1
+* 原因是原始数据中可能存在其他 payment type
+
+---
+
+### 3.5.4 Speed 口径
+
+`avg_speed_mph` 的计算逻辑为：
+
+```text
+speed = trip_distance / trip_duration
+```
+
+该字段主要用于探索性分析，帮助识别异常速度、拥堵模式或区域差异，不直接代表官方交通速度指标。
+
+````
+
+
+
+
+
+
 
 
 
@@ -284,11 +559,263 @@ At this stage, the data ingestion layer has achieved the following:
 
 
 
+````
 
 # Stage5 - Forecasting
 
+## 5.1 本层职责
 
+本阶段负责完成 NYC Taxi demand forecasting，预测不同 pickup zone 在不同日期、不同时段的出租车需求量。
 
+预测粒度：
+
+```text
+pickup zone + date + hour
+```
+
+预测目标：
+
+```text
+trip_count
+```
+
+---
+
+## 5.2 提交文件说明
+
+本阶段上传到 GitHub 的文件只有：
+
+```text
+src/forecasting/prepare_training_data.py
+src/forecasting/train_model.py
+src/forecasting/evaluate_model.py
+
+outputs/figures/actual_vs_predicted_scatter.png
+outputs/figures/actual_vs_predicted_monthly_curve.png
+outputs/figures/prediction_error_distribution.png
+outputs/figures/model_comparison.png
+```
+
+不上传 CSV 文件和模型文件，因为文件较大或可由脚本重新生成。
+
+---
+
+## 5.3 输入数据
+
+本阶段依赖 Part 3 输出：
+
+```text
+data/processed/zone_hour_features/
+```
+
+该表是一行一个：
+
+```text
+pickup zone + pickup date + hour
+```
+
+主要使用字段包括：
+
+```text
+PULocationID
+pickup_zone
+pickup_borough
+pickup_date
+year
+month
+day
+day_of_week
+is_weekend
+hour
+trip_count
+avg_trip_distance
+avg_trip_duration_min
+avg_fare_amount
+avg_total_amount
+avg_passenger_count
+avg_speed_mph
+credit_card_share
+cash_share
+```
+
+---
+
+## 5.4 依赖库
+
+```bash
+pip install pyspark pandas numpy scikit-learn matplotlib joblib
+```
+
+---
+
+## 5.5 运行顺序
+
+```bash
+python src/forecasting/prepare_training_data.py
+python src/forecasting/train_model.py
+python src/forecasting/evaluate_model.py
+```
+
+---
+
+## 5.6 脚本功能
+
+### prepare_training_data.py
+
+功能：
+
+```text
+1. 读取 data/processed/zone_hour_features/
+2. 构造 lag 和 rolling 特征
+3. 随机划分 80% training set 和 20% evaluation set
+4. 输出机器学习可用 CSV
+```
+
+生成但不上传：
+
+```text
+data/processed/forecasting/training_data_full.csv
+data/processed/forecasting/training_data_train.csv
+data/processed/forecasting/training_data_eval.csv
+data/processed/forecasting/train_eval_split_info.csv
+```
+
+---
+
+### train_model.py
+
+功能：
+
+```text
+1. 读取 training_data_train.csv
+2. 训练 Linear Regression、Random Forest、Gradient Boosting
+3. 比较 MAE、RMSE、R2
+4. 自动选择 RMSE 最低的模型
+5. 保存模型文件
+```
+
+生成但不上传：
+
+```text
+outputs/models/linear_regression_model.pkl
+outputs/models/random_forest_model.pkl
+outputs/models/gradient_boosting_model.pkl
+outputs/models/best_model.pkl
+outputs/tables/model_comparison.csv
+```
+
+---
+
+### evaluate_model.py
+
+功能：
+
+```text
+1. 读取 training_data_eval.csv
+2. 加载已训练模型
+3. 在 evaluation set 上预测
+4. 输出最终 metrics
+5. 输出 prediction table
+6. 输出图片
+7. 输出给 Part 6 使用的 CSV
+```
+
+生成但不上传：
+
+```text
+outputs/tables/model_evaluation_metrics.csv
+outputs/predictions/forecast_predictions.csv
+outputs/predictions/plot_actual_vs_predicted_hourly.csv
+outputs/predictions/plot_actual_vs_predicted_monthly.csv
+outputs/predictions/plot_error_distribution.csv
+outputs/predictions/plot_model_comparison.csv
+```
+
+---
+
+## 5.7 Part 6 需要使用的 CSV
+
+Part 6 如果需要重新绘图、调整 dashboard 样式，或展示预测结果表，直接使用以下文件：
+
+```text
+outputs/predictions/forecast_predictions.csv
+```
+
+用途：完整的 zone-hour 预测结果表，包含每条记录的真实 demand、预测 demand、prediction error 和 absolute error。适合 Part 6 做预测结果表格、筛选、地图或 dashboard 明细展示。
+
+```text
+outputs/predictions/plot_actual_vs_predicted_hourly.csv
+```
+
+用途：zone-hour 粒度的 actual vs predicted demand，可用于绘制 hourly actual vs predicted 图。
+
+```text
+outputs/predictions/plot_actual_vs_predicted_monthly.csv
+```
+
+用途：按月份聚合后的 actual vs predicted demand trend，可用于绘制 monthly trend 图。
+
+```text
+outputs/predictions/plot_error_distribution.csv
+```
+
+用途：prediction error distribution，可用于绘制误差分布图。
+
+```text
+outputs/predictions/plot_model_comparison.csv
+```
+
+用途：三个模型的 MAE、RMSE、R2 对比，可用于绘制模型比较图。
+
+---
+
+## 5.8 模型说明
+
+本阶段使用三个 sklearn 回归模型：
+
+```text
+Linear Regression
+Random Forest Regressor
+Gradient Boosting Regressor
+```
+
+最佳模型选择标准：
+
+```text
+RMSE 最低
+```
+
+通常 Random Forest 表现最好，因为 taxi demand 与时间、区域、历史需求之间存在非线性关系。
+
+---
+
+## 5.9 图片输出
+
+上传到 GitHub 的图片包括：
+
+```text
+outputs/figures/actual_vs_predicted_scatter.png
+```
+
+真实值与预测值散点图。
+
+```text
+outputs/figures/actual_vs_predicted_monthly_curve.png
+```
+
+按月份聚合后的 actual vs predicted demand 趋势图。
+
+```text
+outputs/figures/prediction_error_distribution.png
+```
+
+预测误差分布图。
+
+```text
+outputs/figures/model_comparison.png
+```
+
+三个模型的 RMSE 对比图。
 
 
 # Stage6 - Visualization
