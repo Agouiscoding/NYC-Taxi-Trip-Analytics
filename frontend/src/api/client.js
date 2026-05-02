@@ -30,4 +30,15 @@ export const api = {
   spatialStory: (params) => apiGet("/dashboard/spatial-story", params),
   routesStory: (params) => apiGet("/dashboard/routes-story", params),
   businessStory: (params) => apiGet("/dashboard/business-story", params),
+  forecastStory: (params) => apiGet("/forecast/story", params),
+  routeConcentration: (params) => apiGet("/routes/concentration", params),
+  mapCentroids: () => apiGet("/map/centroids"),
+  mapOdFlowHour: (params) => apiGet("/map/od-flow-hour", params),
+  mapOdFlowYearMonth: (params) => apiGet("/map/od-flow-year-month", params),
+  mapReplaySample: (params) => apiGet("/map/replay-sample", params),
+  zoneProfiles: (params) => apiGet("/profiles/zones", params),
+  zoneProfile: (locationId) => apiGet(`/profiles/zones/${locationId}`),
+  routeProfiles: (params) => apiGet("/profiles/routes", params),
+  routeProfile: (pickupLocationId, dropoffLocationId) =>
+    apiGet(`/profiles/routes/${pickupLocationId}/${dropoffLocationId}`),
 };

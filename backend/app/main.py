@@ -5,7 +5,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app import db
 from backend.app.core.config import get_settings
-from backend.app.routers import business, dashboard, meta, routes, spatial, temporal
+from backend.app.routers import (
+    business,
+    dashboard,
+    forecast,
+    map as map_router,
+    meta,
+    profiles,
+    routes,
+    spatial,
+    temporal,
+)
 
 
 settings = get_settings()
@@ -48,4 +58,7 @@ app.include_router(dashboard.router, prefix=settings.api_prefix)
 app.include_router(temporal.router, prefix=settings.api_prefix)
 app.include_router(spatial.router, prefix=settings.api_prefix)
 app.include_router(routes.router, prefix=settings.api_prefix)
+app.include_router(map_router.router, prefix=settings.api_prefix)
+app.include_router(profiles.router, prefix=settings.api_prefix)
 app.include_router(business.router, prefix=settings.api_prefix)
+app.include_router(forecast.router, prefix=settings.api_prefix)

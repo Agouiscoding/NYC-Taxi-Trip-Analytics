@@ -24,6 +24,10 @@ const props = defineProps({
     type: String,
     default: "total_trips",
   },
+  metricLabel: {
+    type: String,
+    default: "trips",
+  },
   idKey: {
     type: String,
     default: "PULocationID",
@@ -33,6 +37,8 @@ const props = defineProps({
     default: 520,
   },
 });
+
+const emit = defineEmits(["select-zone"]);
 
 const root = ref(null);
 let resizeObserver;
@@ -72,7 +78,9 @@ async function render() {
   );
   const rowsById = new Map(props.metrics.map((row) => [Number(row[props.idKey]), row]));
   const maxValue = d3.max([...values.values()]) || 1;
-  const color = d3.scaleSequential(d3.interpolatePuBuGn).domain([0, maxValue]);
+  const color = d3
+    .scaleSequential(d3.interpolateRgbBasis(["#f0f2f4", "#f7c948", "#d44a5f"]))
+    .domain([0, maxValue]);
   const projection = d3.geoMercator().fitExtent(
     [
       [margin, margin],
@@ -114,6 +122,7 @@ async function render() {
     })
     .attr("stroke", "#ffffff")
     .attr("stroke-width", 0.7)
+    .style("cursor", (feature) => (values.has(featureId(feature)) ? "pointer" : "default"))
     .on("mouseenter", function (event, feature) {
       const value = values.get(featureId(feature)) || 0;
       const row = rowsById.get(featureId(feature)) || {};
@@ -123,7 +132,7 @@ async function render() {
         .html(
           `<strong>${feature.properties.zone}</strong>
           <span>${feature.properties.borough}</span>
-          <b>${d3.format(",")(value)} trips</b>
+          <b>${d3.format(",.2f")(value)} ${props.metricLabel}</b>
           ${row.zone_rank_in_year ? `<span>Rank ${row.zone_rank_in_year}</span>` : ""}`
         );
     })
@@ -133,6 +142,15 @@ async function render() {
     .on("mouseleave", function () {
       d3.select(this).attr("stroke", "#ffffff").attr("stroke-width", 0.7);
       tooltip.style("opacity", 0);
+    })
+    .on("click", (event, feature) => {
+      const id = featureId(feature);
+      emit("select-zone", {
+        LocationID: id,
+        feature,
+        metricValue: values.get(id) || 0,
+        row: rowsById.get(id) || null,
+      });
     })
     .append("title")
     .text((feature) => {
@@ -168,7 +186,7 @@ async function render() {
     .attr("class", "legend-label")
     .attr("x", legendX)
     .attr("y", legendY - 7)
-    .text("Trip intensity");
+    .text(props.metricLabel);
 
   svg
     .append("text")
@@ -195,7 +213,7 @@ function resetZoom() {
   svgSelection.transition().duration(280).call(zoomBehavior.transform, d3.zoomIdentity);
 }
 
-watch(() => [props.metrics, props.metricKey, props.idKey], render, { deep: true });
+watch(() => [props.metrics, props.metricKey, props.metricLabel, props.idKey], render, { deep: true });
 
 onMounted(() => {
   render().catch(() => {});

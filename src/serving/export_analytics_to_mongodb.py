@@ -160,10 +160,20 @@ DEFAULT_TABLES: tuple[TableSpec, ...] = (
         "routes_top_routes",
         (("route_rank",), ("PULocationID",), ("DOLocationID",)),
     ),
+    TableSpec(
+        "route_concentration",
+        PROJECT_ROOT / "outputs" / "tables" / "trip_route_analytics" / "csv" / "route_concentration",
+        "route_concentration",
+        (("route_order",), ("route_rank",)),
+    ),
 )
 
 
 OPTIONAL_TABLES: tuple[TableSpec, ...] = (
+    # Atlas-safe optional tables only. Full local tables such as
+    # dropoff_zone_hour_features, zone_balance_hour, and forecast_zone_hour are
+    # intentionally not exported to MongoDB because they are too large for the
+    # 512MB Atlas tier. Keep them as local CSV/Parquet files for offline use.
     TableSpec(
         "top_zones_by_hour",
         PROJECT_ROOT / "outputs" / "tables" / "temporal" / "csv" / "top_zones_by_hour",
@@ -259,10 +269,48 @@ OPTIONAL_TABLES: tuple[TableSpec, ...] = (
         "forecast_weekday_hour_error_heatmap",
         (("day_of_week", "hour"),),
     ),
+    TableSpec(
+        "zone_centroids",
+        PROJECT_ROOT / "outputs" / "tables" / "map" / "csv" / "zone_centroids.csv",
+        "map_zone_centroids",
+        (("LocationID",), ("borough",)),
+    ),
+    TableSpec(
+        "od_flow_hour",
+        PROJECT_ROOT / "outputs" / "tables" / "map" / "csv" / "od_flow_hour",
+        "map_od_flow_hour",
+        (("hour", "PULocationID", "DOLocationID"), ("hour", "route_rank_in_hour")),
+    ),
+    TableSpec(
+        "od_flow_year_month",
+        PROJECT_ROOT / "outputs" / "tables" / "map" / "csv" / "od_flow_year_month",
+        "map_od_flow_year_month",
+        (("year_month", "PULocationID", "DOLocationID"), ("year_month", "route_rank_in_year_month")),
+    ),
+    TableSpec(
+        "map_replay_sample",
+        PROJECT_ROOT / "outputs" / "tables" / "map" / "csv" / "map_replay_sample",
+        "map_replay_sample",
+        (("pickup_date", "hour"), ("PULocationID",), ("DOLocationID",)),
+    ),
+    TableSpec(
+        "zone_profile_summary",
+        PROJECT_ROOT / "outputs" / "tables" / "profiles" / "csv" / "zone_profile_summary",
+        "profile_zone_summary",
+        (("PULocationID",), ("pickup_borough",), ("total_trips",)),
+    ),
+    TableSpec(
+        "route_profile_summary",
+        PROJECT_ROOT / "outputs" / "tables" / "profiles" / "csv" / "route_profile_summary",
+        "profile_route_summary",
+        (("route_rank",), ("PULocationID", "DOLocationID"), ("route_key",)),
+    ),
 )
 
 
 DATE_LIKE_COLUMNS = {
+    "activity_date",
+    "dropoff_date",
     "pickup_date",
     "start_date",
     "end_date",

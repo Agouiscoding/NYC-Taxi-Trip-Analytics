@@ -103,7 +103,7 @@ function render() {
   const color = d3
     .scaleOrdinal()
     .domain(series.map((item) => item.key))
-    .range(["#137b80", "#2f6fbb", "#b7791f", "#c2415d", "#2f855a", "#6f5aa7", "#555b66"]);
+    .range(["#0f1720", "#21bfd0", "#f7c948", "#d44a5f", "#23845a", "#7c6f5f", "#6b7280"]);
 
   const tooltip = d3.select(root.value).append("div").attr("class", "chart-tooltip");
   const svg = d3

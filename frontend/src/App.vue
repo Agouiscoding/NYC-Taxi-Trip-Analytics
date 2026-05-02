@@ -1,120 +1,65 @@
 <template>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand__mark">NY</div>
-        <div>
-          <p class="eyebrow">Big Data Project</p>
-          <h1>Taxi Analytics</h1>
-        </div>
+  <AppShell v-model:active-view="activeView" :nav-items="navItems">
+    <CommandBar
+      :title="currentTitle"
+      :years="years"
+      :boroughs="boroughs"
+      :hours="hours"
+      :year="selectedYear"
+      :borough="selectedBorough"
+      :hour="selectedHour"
+      @update:year="selectedYear = $event"
+      @update:borough="selectedBorough = $event"
+      @update:hour="selectedHour = $event"
+      @reload="reloadAll"
+    />
+
+    <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="loading" class="loading-bar" />
+
+    <MetricStrip :items="metricItems" />
+
+    <section v-if="activeView === 'command'" class="view-stack">
+      <InsightBanner
+        title="NYC Taxi Demand Command Center"
+        summary="Monitor citywide demand, zone pressure, route flow, and forecast risk from one operating surface."
+        :stats="heroStats"
+      />
+
+      <div class="command-layout">
+        <MapExplorer
+          :selected-year="selectedYear"
+          :selected-borough="selectedBorough"
+          :selected-hour="selectedHour"
+          :forecast-zones="forecast.zone_accuracy || []"
+          :refresh-key="refreshKey"
+        />
       </div>
+    </section>
 
-      <nav class="nav-list" aria-label="Dashboard sections">
-        <button
-          v-for="item in navItems"
-          :key="item.key"
-          type="button"
-          :class="['nav-item', { active: activeView === item.key }]"
-          @click="activeView = item.key"
-        >
-          <component :is="item.icon" :size="18" />
-          <span>{{ item.label }}</span>
-        </button>
-      </nav>
-    </aside>
+    <section v-else-if="activeView === 'demand'" class="view-stack">
+      <SectionHeader
+        eyebrow="Demand Patterns"
+        title="Temporal rhythm of city movement"
+        summary="Use this view to compare long-term recovery, hourly peaks, weekday structure, and borough-level seasonality."
+      />
 
-    <main class="workspace">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">MongoDB Atlas + FastAPI + Vue/D3</p>
-          <h2>{{ currentTitle }}</h2>
-        </div>
-
-        <div class="filters">
-          <label>
-            <span>Year</span>
-            <select v-model="selectedYear">
-              <option :value="null">All</option>
-              <option v-for="year in years" :key="year" :value="year">{{ year }}</option>
-            </select>
-          </label>
-          <label>
-            <span>Borough</span>
-            <select v-model="selectedBorough">
-              <option value="">All</option>
-              <option v-for="borough in boroughs" :key="borough" :value="borough">
-                {{ borough }}
-              </option>
-            </select>
-          </label>
-          <label>
-            <span>Hour</span>
-            <select v-model.number="selectedHour">
-              <option v-for="hour in hours" :key="hour" :value="hour">
-                {{ String(hour).padStart(2, "0") }}:00
-              </option>
-            </select>
-          </label>
-          <button class="icon-button" type="button" title="Reload data" @click="loadAll">
-            <RefreshCw :size="18" />
-          </button>
-        </div>
-      </header>
-
-      <div v-if="error" class="error-banner">{{ error }}</div>
-      <div v-if="loading" class="loading-bar" />
-
-      <KpiGrid :items="kpiItems" />
-
-      <section v-if="activeView === 'overview'" class="dashboard-grid">
-        <ChartPanel class="span-2" title="Demand Trend" eyebrow="Overview">
-          <LineChart :data="overview.year_month_demand || []" x-key="year_month" y-key="total_trips" />
+      <section class="analysis-grid">
+        <ChartPanel class="span-2" title="Monthly Demand Timeline" eyebrow="Trips over time">
+          <LineChart :data="temporal.year_month_demand || []" x-key="year_month" y-key="total_trips" :height="330" />
         </ChartPanel>
-        <ChartPanel title="Hourly Pattern" eyebrow="Temporal">
-          <BarChart :data="overview.hourly_demand || []" x-key="hour" y-key="total_trips" color="#2f6fbb" />
+        <ChartPanel title="Hour-of-Day Pattern" eyebrow="Operational curve">
+          <BarChart :data="overview.hourly_demand || []" x-key="hour" y-key="total_trips" color="#111827" />
         </ChartPanel>
-        <ChartPanel title="Top Pickup Zones" eyebrow="Spatial">
-          <HorizontalBarChart
-            :data="overview.top_zones || []"
-            label-key="pickup_zone"
-            value-key="total_trips"
-            color="#2f855a"
-          />
-        </ChartPanel>
-        <ChartPanel class="span-2" title="Weekday-Hour Demand" eyebrow="Heatmap">
-          <HeatmapChart
-            :data="overview.weekday_hour_heatmap || []"
-            x-key="hour"
-            y-key="weekday_name"
-            value-key="total_trips"
-            :x-domain="hours"
-            :y-domain="weekdayDomain"
-          />
-        </ChartPanel>
-        <ChartPanel class="span-2" title="Taxi Zone Demand Map" eyebrow="Map">
-          <TaxiZoneMap :metrics="overview.top_zones || []" metric-key="total_trips" />
-        </ChartPanel>
-        <ChartPanel class="span-2" title="Top Routes" eyebrow="Routes">
-          <DataTable :rows="overview.top_routes || []" :columns="routeColumns" :limit="8" />
-        </ChartPanel>
-      </section>
-
-      <section v-else-if="activeView === 'temporal'" class="dashboard-grid">
-        <ChartPanel title="Yearly Demand" eyebrow="Multi-year">
-          <LineChart :data="temporal.yearly_summary || []" x-key="year" y-key="total_trips" />
-        </ChartPanel>
-        <ChartPanel title="Month Pattern" eyebrow="Seasonality">
+        <ChartPanel title="Seasonality" eyebrow="Average month">
           <BarChart
             :data="temporal.month_of_year_pattern || []"
             x-key="month_name"
             y-key="avg_trips_per_active_year"
-            color="#137b80"
+            color="#21bfd0"
           />
         </ChartPanel>
-        <ChartPanel class="span-2" title="Monthly Demand" eyebrow="Timeline">
-          <LineChart :data="temporal.year_month_demand || []" x-key="year_month" y-key="total_trips" />
-        </ChartPanel>
-        <ChartPanel class="span-2" title="Weekday-Hour Heatmap" eyebrow="Temporal">
+        <ChartPanel class="span-2" title="Weekday-Hour Demand Matrix" eyebrow="Heatmap">
           <HeatmapChart
             :data="temporal.weekday_hour_heatmap || []"
             x-key="hour"
@@ -139,49 +84,62 @@
             y-key="avg_revenue_per_trip"
           />
         </ChartPanel>
-        <ChartPanel class="span-2" title="Borough Monthly Trend" eyebrow="Spatial time">
-          <LineChart
-            :data="temporal.borough_year_month || []"
-            x-key="year_month"
-            y-key="total_trips"
-            series-key="pickup_borough"
+      </section>
+    </section>
+
+    <section v-else-if="activeView === 'zones'" class="view-stack">
+      <SectionHeader
+        eyebrow="Zone Intelligence"
+        title="Pickup hot zones and local operating profiles"
+        summary="Rank demand centers, inspect forecast misses, and compare how zones move through time."
+      />
+
+      <section class="analysis-grid">
+        <ChartPanel class="span-2" title="Pickup Zone Demand Map" eyebrow="Taxi zones">
+          <TaxiZoneMap
+            :metrics="spatial.top_zones || []"
+            metric-key="total_trips"
+            metric-label="trips"
+            @select-zone="selectedZone = $event"
           />
         </ChartPanel>
-      </section>
-
-      <section v-else-if="activeView === 'spatial'" class="dashboard-grid">
-        <ChartPanel class="span-2" title="Taxi Zone Choropleth" eyebrow="Spatial">
-          <TaxiZoneMap :metrics="spatial.top_zones || []" metric-key="total_trips" />
-        </ChartPanel>
-        <ChartPanel title="Top Zones" eyebrow="Ranking">
+        <ChartPanel title="Top Pickup Zones" eyebrow="Ranking">
           <HorizontalBarChart
             :data="spatial.top_zones || []"
             label-key="pickup_zone"
             value-key="total_trips"
-            color="#2f855a"
+            color="#111827"
           />
         </ChartPanel>
-        <ChartPanel title="Hotspots by Selected Hour" eyebrow="Hour slider">
+        <ChartPanel title="Hotspots at Selected Hour" eyebrow="Hourly pressure">
           <HorizontalBarChart
             :data="spatial.top_zones_by_hour || []"
             label-key="pickup_zone"
             value-key="total_trips"
-            color="#b7791f"
+            color="#f7c948"
           />
         </ChartPanel>
-        <ChartPanel class="span-2" title="Zone Rank Change" eyebrow="2021-2024">
+        <ChartPanel class="span-2" title="Zone Rank Change" eyebrow="Longitudinal movement">
           <DataTable :rows="spatial.zone_rank_change || []" :columns="zoneRankColumns" :limit="20" />
         </ChartPanel>
       </section>
+    </section>
 
-      <section v-else-if="activeView === 'routes'" class="dashboard-grid">
-        <ChartPanel class="span-2" title="Route Flow Map" eyebrow="Network">
-          <RouteFlowMap :routes="routes.top_routes || []" :limit="35" />
+    <section v-else-if="activeView === 'network'" class="view-stack">
+      <SectionHeader
+        eyebrow="Route Network"
+        title="Origin-destination flows and route concentration"
+        summary="Explore dominant OD corridors, airport movements, inter-borough connectivity, and route economics."
+      />
+
+      <section class="analysis-grid">
+        <ChartPanel class="span-2" title="Route Flow Map" eyebrow="OD network">
+          <RouteFlowMap :routes="routes.top_routes || []" :limit="45" />
         </ChartPanel>
         <ChartPanel class="span-2" title="Top Routes" eyebrow="Pickup to dropoff">
           <DataTable :rows="routes.top_routes || []" :columns="routeColumns" :limit="12" />
         </ChartPanel>
-        <ChartPanel class="span-2" title="Borough Route Matrix" eyebrow="OD matrix">
+        <ChartPanel class="span-2" title="Borough OD Matrix" eyebrow="Trip volume">
           <HeatmapChart
             :data="routes.route_borough_matrix || []"
             x-key="dropoff_borough"
@@ -194,7 +152,7 @@
             :data="routes.top_airport_routes || []"
             label-key="route_name"
             value-key="trip_count"
-            color="#2f6fbb"
+            color="#21bfd0"
           />
         </ChartPanel>
         <ChartPanel title="Inter-Borough Routes" eyebrow="Cross borough">
@@ -202,55 +160,94 @@
             :data="routes.top_inter_borough_routes || []"
             label-key="route_name"
             value-key="trip_count"
-            color="#c2415d"
-          />
-        </ChartPanel>
-        <ChartPanel title="Revenue per Mile" eyebrow="Efficiency">
-          <HorizontalBarChart
-            :data="routes.route_efficiency_ranking || []"
-            label-key="route_name"
-            value-key="revenue_per_mile"
-            color="#137b80"
-          />
-        </ChartPanel>
-        <ChartPanel title="Tip Share" eyebrow="Payment behavior">
-          <HorizontalBarChart
-            :data="routes.route_tip_ranking || []"
-            label-key="route_name"
-            value-key="route_tip_share"
-            color="#b7791f"
+            color="#d44a5f"
           />
         </ChartPanel>
       </section>
+    </section>
 
-      <section v-else class="dashboard-grid">
+    <section v-else-if="activeView === 'forecast'" class="view-stack">
+      <SectionHeader
+        eyebrow="Forecast Lab"
+        title="Model accuracy and spatial demand risk"
+        summary="Compare observed demand with model estimates and inspect where prediction error concentrates."
+      />
+
+      <section class="analysis-grid">
+        <ChartPanel class="span-2" title="Daily Actual vs Predicted Demand" eyebrow="2024 test set">
+          <LineChart
+            :data="dailyForecastLong"
+            x-key="pickup_date"
+            y-key="value"
+            series-key="series"
+            :height="360"
+          />
+        </ChartPanel>
+        <ChartPanel title="Model Test Metrics" eyebrow="RMSE">
+          <BarChart :data="forecast.model_evaluation_metrics || []" x-key="model" y-key="RMSE" color="#d44a5f" />
+        </ChartPanel>
+        <ChartPanel title="Monthly Actual vs Predicted" eyebrow="Demand curve">
+          <LineChart :data="monthlyForecastLong" x-key="year_month" y-key="value" series-key="series" />
+        </ChartPanel>
+        <ChartPanel class="span-2" title="Zone Forecast Error Map" eyebrow="Absolute error">
+          <TaxiZoneMap
+            :metrics="forecast.zone_accuracy || []"
+            metric-key="aggregate_absolute_error"
+            metric-label="absolute error"
+          />
+        </ChartPanel>
+        <ChartPanel title="Error by Hour" eyebrow="MAE">
+          <BarChart :data="forecast.error_by_hour || []" x-key="hour" y-key="mae" color="#f7c948" />
+        </ChartPanel>
+        <ChartPanel title="Error by Borough" eyebrow="MAE">
+          <HorizontalBarChart
+            :data="forecast.error_by_borough || []"
+            label-key="pickup_borough"
+            value-key="mae"
+            color="#21bfd0"
+          />
+        </ChartPanel>
+      </section>
+    </section>
+
+    <section v-else-if="activeView === 'tables'" class="view-stack">
+      <SectionHeader
+        eyebrow="Data Tables"
+        title="Operational reference tables"
+        summary="Compact table views for route ranking, payment behavior, forecast misses, and zone movement."
+      />
+
+      <section class="analysis-grid">
+        <ChartPanel class="span-2" title="Largest Zone Forecast Misses" eyebrow="Forecast">
+          <DataTable :rows="forecast.zone_accuracy || []" :columns="forecastZoneColumns" :limit="16" />
+        </ChartPanel>
+        <ChartPanel class="span-2" title="Route Ranking" eyebrow="Network">
+          <DataTable :rows="routes.top_routes || []" :columns="routeColumns" :limit="16" />
+        </ChartPanel>
         <ChartPanel title="Payment Type" eyebrow="Business">
           <HorizontalBarChart
             :data="business.payment_type || []"
             label-key="payment_type_desc"
             value-key="trip_count"
-            color="#2f6fbb"
+            color="#111827"
           />
         </ChartPanel>
-        <ChartPanel title="Trip Behavior by Hour" eyebrow="Hourly">
+        <ChartPanel title="Trip Behavior by Hour" eyebrow="Revenue">
           <LineChart :data="business.trip_behavior_by_hour || []" x-key="hour" y-key="avg_revenue_per_trip" />
         </ChartPanel>
-        <ChartPanel class="span-2" title="Payment Type Table" eyebrow="Details">
-          <DataTable :rows="business.payment_type || []" :columns="paymentColumns" :limit="12" />
-        </ChartPanel>
       </section>
-    </main>
-  </div>
+    </section>
+  </AppShell>
 </template>
 
 <script setup>
 import {
-  BarChart3,
-  CarTaxiFront,
-  Map,
-  RefreshCw,
-  Route,
-  WalletCards,
+  BrainCircuit,
+  Clock3,
+  Database,
+  MapPinned,
+  Network,
+  Radar,
 } from "lucide-vue-next";
 import { computed, onMounted, ref, watch } from "vue";
 
@@ -262,33 +259,43 @@ import HorizontalBarChart from "@/components/charts/HorizontalBarChart.vue";
 import LineChart from "@/components/charts/LineChart.vue";
 import RouteFlowMap from "@/components/charts/RouteFlowMap.vue";
 import TaxiZoneMap from "@/components/charts/TaxiZoneMap.vue";
+import MapExplorer from "@/components/MapExplorer.vue";
 import ChartPanel from "@/components/layout/ChartPanel.vue";
-import KpiGrid from "@/components/layout/KpiGrid.vue";
+import AppShell from "@/components/product/AppShell.vue";
+import CommandBar from "@/components/product/CommandBar.vue";
+import InsightBanner from "@/components/product/InsightBanner.vue";
+import MetricStrip from "@/components/product/MetricStrip.vue";
+import SectionHeader from "@/components/product/SectionHeader.vue";
 import { compact, decimal, integer, money, pct } from "@/utils/format";
 
 const navItems = [
-  { key: "overview", label: "Overview", icon: BarChart3 },
-  { key: "temporal", label: "Temporal", icon: CarTaxiFront },
-  { key: "spatial", label: "Spatial", icon: Map },
-  { key: "routes", label: "Routes", icon: Route },
-  { key: "business", label: "Business", icon: WalletCards },
+  { key: "command", label: "Command Center", icon: Radar },
+  { key: "demand", label: "Demand Patterns", icon: Clock3 },
+  { key: "zones", label: "Zone Intelligence", icon: MapPinned },
+  { key: "network", label: "Route Network", icon: Network },
+  { key: "forecast", label: "Forecast Lab", icon: BrainCircuit },
+  { key: "tables", label: "Data Tables", icon: Database },
 ];
+
 const weekdayDomain = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const hours = Array.from({ length: 24 }, (_, index) => index);
 
-const activeView = ref("overview");
+const activeView = ref("command");
 const loading = ref(false);
 const error = ref("");
+const refreshKey = ref(0);
 const years = ref([]);
 const boroughs = ref([]);
 const selectedYear = ref(null);
 const selectedBorough = ref("");
 const selectedHour = ref(18);
+const selectedZone = ref(null);
 const overview = ref({});
 const temporal = ref({});
 const spatial = ref({});
 const routes = ref({});
 const business = ref({});
+const forecast = ref({});
 
 const currentTitle = computed(() => navItems.find((item) => item.key === activeView.value)?.label || "Dashboard");
 const selectedYearSummary = computed(() => {
@@ -296,27 +303,52 @@ const selectedYearSummary = computed(() => {
   return rows.find((row) => row.year === selectedYear.value) || rows.at(-1) || {};
 });
 const kpiSource = computed(() => (selectedYear.value ? selectedYearSummary.value : overview.value.kpi || {}));
-const kpiItems = computed(() => [
-  {
-    label: "Trips",
-    value: compact(kpiSource.value.total_trips),
-    note: selectedYear.value ? `${selectedYear.value} selected` : "All imported records",
-  },
-  {
-    label: "Revenue",
-    value: money(kpiSource.value.total_revenue),
-    note: `${money(kpiSource.value.avg_revenue_per_trip || kpiSource.value.avg_revenue_per_day)} avg`,
-  },
-  {
-    label: "Active Days",
-    value: integer(kpiSource.value.active_days),
-    note: "Coverage after pipeline",
-  },
-  {
-    label: "Pickup Zones",
-    value: integer(kpiSource.value.active_pickup_zones),
-    note: "Joined with taxi zone lookup",
-  },
+const bestForecastModel = computed(() => {
+  const rows = forecast.value.model_evaluation_metrics || [];
+  return rows.find((row) => isTrue(row.is_best_model)) || rows[0] || {};
+});
+const forecastTotals = computed(() => {
+  const rows = forecast.value.monthly_actual_predicted || [];
+  const actual = rows.reduce((sum, row) => sum + Number(row.trip_count || 0), 0);
+  const predicted = rows.reduce((sum, row) => sum + Number(row.predicted_trip_count || 0), 0);
+  return {
+    actual,
+    predicted,
+    error: actual - predicted,
+  };
+});
+const metricItems = computed(() => {
+  if (activeView.value === "forecast") {
+    const model = bestForecastModel.value;
+    const totals = forecastTotals.value;
+    const bias = totals.error >= 0 ? "under predicted" : "over predicted";
+    return [
+      { label: "Best model", value: model.model || "Pending", note: "2024 test set" },
+      { label: "R2", value: decimal(model.R2, 3), note: `${decimal(model.RMSE, 2)} RMSE` },
+      { label: "MAE", value: decimal(model.MAE, 2), note: "zone-hour trips" },
+      { label: "Bias", value: compact(Math.abs(totals.error)), note: bias },
+    ];
+  }
+
+  return [
+    {
+      label: "Trips",
+      value: compact(kpiSource.value.total_trips),
+      note: selectedYear.value ? `${selectedYear.value} selected` : "All imported records",
+    },
+    {
+      label: "Revenue",
+      value: money(kpiSource.value.total_revenue),
+      note: `${money(kpiSource.value.avg_revenue_per_trip || kpiSource.value.avg_revenue_per_day)} avg`,
+    },
+    { label: "Active days", value: integer(kpiSource.value.active_days), note: "Pipeline coverage" },
+    { label: "Pickup zones", value: integer(kpiSource.value.active_pickup_zones), note: "Joined to TLC zones" },
+  ];
+});
+const heroStats = computed(() => [
+  { label: "Selected hour", value: `${String(selectedHour.value).padStart(2, "0")}:00` },
+  { label: "Borough", value: selectedBorough.value || "Citywide" },
+  { label: "Top zones loaded", value: integer((spatial.value.top_zones || []).length) },
 ]);
 
 const routeColumns = [
@@ -335,13 +367,49 @@ const zoneRankColumns = [
   { key: "rank_improvement", label: "Improvement", numeric: true, format: integer },
   { key: "trip_count_change", label: "Trip Change", numeric: true, format: integer },
 ];
-const paymentColumns = [
-  { key: "payment_type_desc", label: "Payment Type" },
-  { key: "trip_count", label: "Trips", numeric: true, format: integer },
-  { key: "total_revenue", label: "Revenue", numeric: true, format: money },
-  { key: "avg_revenue_per_trip", label: "Revenue / Trip", numeric: true, format: money },
-  { key: "avg_tip_share_of_total", label: "Tip Share", numeric: true, format: pct },
+const forecastZoneColumns = [
+  { key: "pickup_zone", label: "Zone" },
+  { key: "pickup_borough", label: "Borough" },
+  { key: "actual_trip_count", label: "Actual", numeric: true, format: integer },
+  { key: "predicted_trip_count", label: "Predicted", numeric: true, format: (value) => decimal(value, 0) },
+  { key: "mae", label: "MAE", numeric: true, format: (value) => decimal(value, 2) },
+  {
+    key: "aggregate_absolute_percentage_error",
+    label: "Agg APE",
+    numeric: true,
+    format: percentPoints,
+  },
 ];
+
+const monthlyForecastLong = computed(() =>
+  actualPredictedLong(forecast.value.monthly_actual_predicted || [], "year_month")
+);
+const dailyForecastLong = computed(() =>
+  actualPredictedLong(forecast.value.daily_actual_predicted || [], "pickup_date")
+);
+
+function isTrue(value) {
+  return value === true || value === "true" || value === "True";
+}
+
+function percentPoints(value) {
+  return `${decimal(value, 1)}%`;
+}
+
+function actualPredictedLong(rows, xKey) {
+  return rows.flatMap((row) => [
+    {
+      [xKey]: row[xKey],
+      series: "Actual",
+      value: Number(row.trip_count || row.actual_trip_count || 0),
+    },
+    {
+      [xKey]: row[xKey],
+      series: "Predicted",
+      value: Number(row.predicted_trip_count || 0),
+    },
+  ]);
+}
 
 async function loadFilters() {
   const result = await api.filters();
@@ -359,12 +427,13 @@ async function loadAll() {
       year: selectedYear.value,
       borough: selectedBorough.value || null,
     };
-    const [overviewResult, temporalResult, spatialResult, routesResult, businessResult] = await Promise.all([
+    const [overviewResult, temporalResult, spatialResult, routesResult, businessResult, forecastResult] = await Promise.all([
       api.overview({ year: selectedYear.value, zone_limit: 20, route_limit: 12 }),
       api.temporalStory(params),
       api.spatialStory({ year: selectedYear.value, hour: selectedHour.value, zone_limit: 25 }),
       api.routesStory({ route_limit: 25 }),
       api.businessStory({ year: selectedYear.value }),
+      api.forecastStory({ zone_limit: 300 }),
     ]);
 
     overview.value = overviewResult.data;
@@ -372,11 +441,17 @@ async function loadAll() {
     spatial.value = spatialResult.data;
     routes.value = routesResult.data;
     business.value = businessResult.data;
+    forecast.value = forecastResult.data;
   } catch (caught) {
     error.value = caught.message || "Failed to load dashboard data.";
   } finally {
     loading.value = false;
   }
+}
+
+async function reloadAll() {
+  refreshKey.value += 1;
+  await loadAll();
 }
 
 watch([selectedYear, selectedBorough, selectedHour], loadAll);

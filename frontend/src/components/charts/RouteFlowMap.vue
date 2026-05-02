@@ -30,6 +30,8 @@ const props = defineProps({
   },
 });
 
+const emit = defineEmits(["select-route"]);
+
 const root = ref(null);
 let resizeObserver;
 let geojson = null;
@@ -86,7 +88,9 @@ async function render() {
     .slice(0, props.limit);
   const maxTrips = d3.max(rows, (route) => Number(route.trip_count)) || 1;
   const stroke = d3.scaleLinear().domain([0, maxTrips]).range([1.2, 8]);
-  const color = d3.scaleSequential(d3.interpolateTurbo).domain([0, maxTrips]);
+  const color = d3
+    .scaleSequential(d3.interpolateRgbBasis(["#21bfd0", "#f7c948", "#d44a5f"]))
+    .domain([0, maxTrips]);
 
   d3.select(root.value).selectAll("svg").remove();
   d3.select(root.value).selectAll(".chart-tooltip").remove();
@@ -124,13 +128,14 @@ async function render() {
     .attr("stroke-width", (route) => stroke(Number(route.trip_count)))
     .attr("stroke-linecap", "round")
     .attr("opacity", 0.74)
+    .style("cursor", "pointer")
     .on("mouseenter", function (event, route) {
       d3.select(this).attr("opacity", 1).attr("stroke-width", stroke(Number(route.trip_count)) + 2).raise();
       tooltip
         .style("opacity", 1)
         .html(
           `<strong>${route.route_name}</strong>
-          <span>Rank ${route.route_rank}</span>
+          <span>Rank ${route.route_rank || route.route_rank_in_hour || route.route_rank_in_year_month || "-"}</span>
           <b>${d3.format(",")(Number(route.trip_count))} trips</b>
           <span>$${d3.format(",.0f")(Number(route.total_revenue || 0))} revenue</span>`
         );
@@ -141,6 +146,9 @@ async function render() {
     .on("mouseleave", function (event, route) {
       d3.select(this).attr("opacity", 0.74).attr("stroke-width", stroke(Number(route.trip_count)));
       tooltip.style("opacity", 0);
+    })
+    .on("click", (event, route) => {
+      emit("select-route", route);
     });
 
   const endpoints = rows.flatMap((route) => [
