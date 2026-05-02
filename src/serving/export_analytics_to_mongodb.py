@@ -211,6 +211,54 @@ OPTIONAL_TABLES: tuple[TableSpec, ...] = (
         "business_trip_behavior_by_hour",
         (("hour",),),
     ),
+    TableSpec(
+        "forecast_model_comparison",
+        PROJECT_ROOT / "outputs" / "tables" / "model_comparison.csv",
+        "forecast_model_comparison",
+        (("model",), ("is_best_model",)),
+    ),
+    TableSpec(
+        "forecast_model_evaluation_metrics",
+        PROJECT_ROOT / "outputs" / "tables" / "model_evaluation_metrics.csv",
+        "forecast_model_evaluation_metrics",
+        (("model",), ("is_best_model",)),
+    ),
+    TableSpec(
+        "forecast_monthly_actual_predicted",
+        PROJECT_ROOT / "outputs" / "predictions" / "plot_actual_vs_predicted_monthly.csv",
+        "forecast_monthly_actual_predicted",
+        (("year_month",),),
+    ),
+    TableSpec(
+        "forecast_daily_actual_predicted",
+        PROJECT_ROOT / "outputs" / "predictions" / "forecast_daily_actual_predicted.csv",
+        "forecast_daily_actual_predicted",
+        (("pickup_date",), ("year", "month")),
+    ),
+    TableSpec(
+        "forecast_error_by_hour",
+        PROJECT_ROOT / "outputs" / "predictions" / "forecast_error_by_hour.csv",
+        "forecast_error_by_hour",
+        (("hour",),),
+    ),
+    TableSpec(
+        "forecast_error_by_borough",
+        PROJECT_ROOT / "outputs" / "predictions" / "forecast_error_by_borough.csv",
+        "forecast_error_by_borough",
+        (("pickup_borough",),),
+    ),
+    TableSpec(
+        "forecast_zone_accuracy",
+        PROJECT_ROOT / "outputs" / "predictions" / "forecast_zone_accuracy.csv",
+        "forecast_zone_accuracy",
+        (("PULocationID",), ("pickup_borough",), ("aggregate_absolute_error",)),
+    ),
+    TableSpec(
+        "forecast_weekday_hour_error_heatmap",
+        PROJECT_ROOT / "outputs" / "predictions" / "forecast_weekday_hour_error_heatmap.csv",
+        "forecast_weekday_hour_error_heatmap",
+        (("day_of_week", "hour"),),
+    ),
 )
 
 
