@@ -2,22 +2,15 @@
   <AppShell v-model:active-view="activeView" :nav-items="navItems">
     <CommandBar
       :title="currentTitle"
-      :years="years"
-      :boroughs="boroughs"
-      :hours="hours"
-      :year="selectedYear"
-      :borough="selectedBorough"
-      :hour="selectedHour"
-      @update:year="selectedYear = $event"
-      @update:borough="selectedBorough = $event"
-      @update:hour="selectedHour = $event"
+      :controls="commandControls"
+      @update:control="updateCommandControl"
       @reload="reloadAll"
     />
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading-bar" />
 
-    <MetricStrip :items="metricItems" />
+    <MetricStrip :mode="metricStripMode" :items="metricItems" :context-items="contextItems" />
 
     <section v-if="activeView === 'command'" class="view-stack">
       <InsightBanner
@@ -49,14 +42,14 @@
           <LineChart :data="temporal.year_month_demand || []" x-key="year_month" y-key="total_trips" :height="330" />
         </ChartPanel>
         <ChartPanel title="Hour-of-Day Pattern" eyebrow="Operational curve">
-          <BarChart :data="overview.hourly_demand || []" x-key="hour" y-key="total_trips" color="#111827" />
+          <BarChart :data="overview.hourly_demand || []" x-key="hour" y-key="total_trips" color="#ffd23f" />
         </ChartPanel>
         <ChartPanel title="Seasonality" eyebrow="Average month">
           <BarChart
             :data="temporal.month_of_year_pattern || []"
             x-key="month_name"
             y-key="avg_trips_per_active_year"
-            color="#21bfd0"
+            color="#4dd6ff"
           />
         </ChartPanel>
         <ChartPanel class="span-2" title="Weekday-Hour Demand Matrix" eyebrow="Heatmap">
@@ -108,7 +101,7 @@
             :data="spatial.top_zones || []"
             label-key="pickup_zone"
             value-key="total_trips"
-            color="#111827"
+            color="#ffd23f"
           />
         </ChartPanel>
         <ChartPanel title="Hotspots at Selected Hour" eyebrow="Hourly pressure">
@@ -116,7 +109,7 @@
             :data="spatial.top_zones_by_hour || []"
             label-key="pickup_zone"
             value-key="total_trips"
-            color="#f7c948"
+            color="#ffd23f"
           />
         </ChartPanel>
         <ChartPanel class="span-2" title="Zone Rank Change" eyebrow="Longitudinal movement">
@@ -134,10 +127,10 @@
 
       <section class="analysis-grid">
         <ChartPanel class="span-2" title="Route Flow Map" eyebrow="OD network">
-          <RouteFlowMap :routes="routes.top_routes || []" :limit="45" />
+          <RouteFlowMap :routes="networkRouteRows" :limit="routeLimit" />
         </ChartPanel>
-        <ChartPanel class="span-2" title="Top Routes" eyebrow="Pickup to dropoff">
-          <DataTable :rows="routes.top_routes || []" :columns="routeColumns" :limit="12" />
+        <ChartPanel class="span-2" :title="networkTableTitle" eyebrow="Pickup to dropoff">
+          <DataTable :rows="networkRouteRows" :columns="routeColumns" :limit="routeLimit" />
         </ChartPanel>
         <ChartPanel class="span-2" title="Borough OD Matrix" eyebrow="Trip volume">
           <HeatmapChart
@@ -152,7 +145,7 @@
             :data="routes.top_airport_routes || []"
             label-key="route_name"
             value-key="trip_count"
-            color="#21bfd0"
+            color="#4dd6ff"
           />
         </ChartPanel>
         <ChartPanel title="Inter-Borough Routes" eyebrow="Cross borough">
@@ -160,7 +153,7 @@
             :data="routes.top_inter_borough_routes || []"
             label-key="route_name"
             value-key="trip_count"
-            color="#d44a5f"
+            color="#ff5d8f"
           />
         </ChartPanel>
       </section>
@@ -183,8 +176,13 @@
             :height="360"
           />
         </ChartPanel>
-        <ChartPanel title="Model Test Metrics" eyebrow="RMSE">
-          <BarChart :data="forecast.model_evaluation_metrics || []" x-key="model" y-key="RMSE" color="#d44a5f" />
+        <ChartPanel :title="`Model Test Metrics (${forecastMetric})`" eyebrow="2024 test set">
+          <BarChart
+            :data="forecast.model_evaluation_metrics || []"
+            x-key="model"
+            :y-key="forecastMetric"
+            :color="forecastMetricColor"
+          />
         </ChartPanel>
         <ChartPanel title="Monthly Actual vs Predicted" eyebrow="Demand curve">
           <LineChart :data="monthlyForecastLong" x-key="year_month" y-key="value" series-key="series" />
@@ -197,14 +195,14 @@
           />
         </ChartPanel>
         <ChartPanel title="Error by Hour" eyebrow="MAE">
-          <BarChart :data="forecast.error_by_hour || []" x-key="hour" y-key="mae" color="#f7c948" />
+          <BarChart :data="forecast.error_by_hour || []" x-key="hour" y-key="mae" color="#ffd23f" />
         </ChartPanel>
         <ChartPanel title="Error by Borough" eyebrow="MAE">
           <HorizontalBarChart
             :data="forecast.error_by_borough || []"
             label-key="pickup_borough"
             value-key="mae"
-            color="#21bfd0"
+            color="#4dd6ff"
           />
         </ChartPanel>
       </section>
@@ -218,22 +216,8 @@
       />
 
       <section class="analysis-grid">
-        <ChartPanel class="span-2" title="Largest Zone Forecast Misses" eyebrow="Forecast">
-          <DataTable :rows="forecast.zone_accuracy || []" :columns="forecastZoneColumns" :limit="16" />
-        </ChartPanel>
-        <ChartPanel class="span-2" title="Route Ranking" eyebrow="Network">
-          <DataTable :rows="routes.top_routes || []" :columns="routeColumns" :limit="16" />
-        </ChartPanel>
-        <ChartPanel title="Payment Type" eyebrow="Business">
-          <HorizontalBarChart
-            :data="business.payment_type || []"
-            label-key="payment_type_desc"
-            value-key="trip_count"
-            color="#111827"
-          />
-        </ChartPanel>
-        <ChartPanel title="Trip Behavior by Hour" eyebrow="Revenue">
-          <LineChart :data="business.trip_behavior_by_hour || []" x-key="hour" y-key="avg_revenue_per_trip" />
+        <ChartPanel class="span-2" :title="activeTable.title" :eyebrow="activeTable.eyebrow">
+          <DataTable :rows="filteredTableRows" :columns="activeTable.columns" :limit="tableLimit" />
         </ChartPanel>
       </section>
     </section>
@@ -266,7 +250,7 @@ import CommandBar from "@/components/product/CommandBar.vue";
 import InsightBanner from "@/components/product/InsightBanner.vue";
 import MetricStrip from "@/components/product/MetricStrip.vue";
 import SectionHeader from "@/components/product/SectionHeader.vue";
-import { compact, decimal, integer, money, pct } from "@/utils/format";
+import { compact, decimal, integer, money } from "@/utils/format";
 
 const navItems = [
   { key: "command", label: "Command Center", icon: Radar },
@@ -290,6 +274,13 @@ const selectedYear = ref(null);
 const selectedBorough = ref("");
 const selectedHour = ref(18);
 const selectedZone = ref(null);
+const routeLens = ref("all");
+const routeLimit = ref(45);
+const forecastMetric = ref("RMSE");
+const forecastZoneLimit = ref(300);
+const tableSource = ref("forecast");
+const tableLimit = ref(16);
+const tableSearch = ref("");
 const overview = ref({});
 const temporal = ref({});
 const spatial = ref({});
@@ -298,6 +289,106 @@ const business = ref({});
 const forecast = ref({});
 
 const currentTitle = computed(() => navItems.find((item) => item.key === activeView.value)?.label || "Dashboard");
+const yearOptions = computed(() => [
+  { label: "All", value: null },
+  ...years.value.map((year) => ({ label: String(year), value: year })),
+]);
+const boroughOptions = computed(() => [
+  { label: "All boroughs", value: "" },
+  ...boroughs.value.map((borough) => ({ label: borough, value: borough })),
+]);
+const hourOptions = computed(() =>
+  hours.map((hour) => ({ label: `${String(hour).padStart(2, "0")}:00`, value: hour }))
+);
+const commandControls = computed(() => {
+  if (activeView.value === "command") {
+    return [
+      { key: "selectedYear", label: "Year", options: yearOptions.value, value: selectedYear.value, valueType: "number" },
+      { key: "selectedBorough", label: "Borough", options: boroughOptions.value, value: selectedBorough.value },
+      { key: "selectedHour", label: "Hour", options: hourOptions.value, value: selectedHour.value, valueType: "number" },
+    ];
+  }
+
+  if (activeView.value === "demand") {
+    return [
+      { key: "selectedYear", label: "Year", options: yearOptions.value, value: selectedYear.value, valueType: "number" },
+      { key: "selectedBorough", label: "Borough", options: boroughOptions.value, value: selectedBorough.value },
+    ];
+  }
+
+  if (activeView.value === "zones") {
+    return [
+      { key: "selectedYear", label: "Year", options: yearOptions.value, value: selectedYear.value, valueType: "number" },
+      { key: "selectedHour", label: "Hour", options: hourOptions.value, value: selectedHour.value, valueType: "number" },
+    ];
+  }
+
+  if (activeView.value === "network") {
+    return [
+      {
+        key: "routeLens",
+        label: "Route lens",
+        value: routeLens.value,
+        options: [
+          { label: "All routes", value: "all" },
+          { label: "Airport", value: "airport" },
+          { label: "Inter-borough", value: "interborough" },
+        ],
+      },
+      {
+        key: "routeLimit",
+        label: "Top N",
+        value: routeLimit.value,
+        valueType: "number",
+        options: [25, 45, 80].map((value) => ({ label: String(value), value })),
+      },
+    ];
+  }
+
+  if (activeView.value === "forecast") {
+    return [
+      {
+        key: "forecastMetric",
+        label: "Metric",
+        value: forecastMetric.value,
+        options: ["RMSE", "MAE", "R2"].map((value) => ({ label: value, value })),
+      },
+      {
+        key: "forecastZoneLimit",
+        label: "Zones",
+        value: forecastZoneLimit.value,
+        valueType: "number",
+        options: [100, 300, 500].map((value) => ({ label: String(value), value })),
+      },
+    ];
+  }
+
+  if (activeView.value === "tables") {
+    return [
+      {
+        key: "tableSource",
+        label: "Table",
+        value: tableSource.value,
+        options: [
+          { label: "Forecast misses", value: "forecast" },
+          { label: "Route ranking", value: "routes" },
+          { label: "Zone rank change", value: "zones" },
+          { label: "Payment type", value: "payments" },
+        ],
+      },
+      {
+        key: "tableLimit",
+        label: "Rows",
+        value: tableLimit.value,
+        valueType: "number",
+        options: [12, 16, 25, 50].map((value) => ({ label: String(value), value })),
+      },
+      { key: "tableSearch", label: "Search", type: "search", value: tableSearch.value, placeholder: "Zone, route, borough" },
+    ];
+  }
+
+  return [];
+});
 const selectedYearSummary = computed(() => {
   const rows = overview.value.yearly_summary || [];
   return rows.find((row) => row.year === selectedYear.value) || rows.at(-1) || {};
@@ -345,6 +436,47 @@ const metricItems = computed(() => {
     { label: "Pickup zones", value: integer(kpiSource.value.active_pickup_zones), note: "Joined to TLC zones" },
   ];
 });
+const metricStripMode = computed(() =>
+  activeView.value === "command" || activeView.value === "forecast" ? "metrics" : "context"
+);
+const contextItems = computed(() => {
+  const selectedYearLabel = selectedYear.value || "All years";
+  const selectedBoroughLabel = selectedBorough.value || "Citywide";
+
+  if (activeView.value === "demand") {
+    return [
+      { label: "Scope", value: `${selectedYearLabel} / ${selectedBoroughLabel}` },
+      { label: "Read", value: "Monthly trend, hourly rhythm, weekday structure" },
+      { label: "Filter note", value: "Hour is summarized inside the charts" },
+    ];
+  }
+
+  if (activeView.value === "zones") {
+    return [
+      { label: "Scope", value: `${selectedYearLabel} / ${String(selectedHour.value).padStart(2, "0")}:00` },
+      { label: "Metric", value: "Pickup demand and selected-hour pressure" },
+      { label: "Geometry", value: "TLC taxi zones joined by LocationID" },
+    ];
+  }
+
+  if (activeView.value === "network") {
+    return [
+      { label: "Lens", value: networkTableTitle.value },
+      { label: "Rows", value: `Top ${routeLimit.value} corridors` },
+      { label: "Read", value: "OD concentration, airport movement, borough connectivity" },
+    ];
+  }
+
+  if (activeView.value === "tables") {
+    return [
+      { label: "Source", value: activeTable.value.title },
+      { label: "Rows", value: `Showing ${tableLimit.value}` },
+      { label: "Search", value: tableSearch.value || "All records" },
+    ];
+  }
+
+  return [];
+});
 const heroStats = computed(() => [
   { label: "Selected hour", value: `${String(selectedHour.value).padStart(2, "0")}:00` },
   { label: "Borough", value: selectedBorough.value || "Citywide" },
@@ -352,7 +484,12 @@ const heroStats = computed(() => [
 ]);
 
 const routeColumns = [
-  { key: "route_rank", label: "Rank", numeric: true, format: integer },
+  {
+    key: "route_rank",
+    label: "Rank",
+    numeric: true,
+    format: (value, row) => integer(value || row.route_rank_in_hour || row.route_rank_in_year_month || row.route_rank),
+  },
   { key: "route_name", label: "Route" },
   { key: "trip_count", label: "Trips", numeric: true, format: integer },
   { key: "avg_trip_distance", label: "Miles", numeric: true, format: (value) => decimal(value, 2) },
@@ -380,6 +517,86 @@ const forecastZoneColumns = [
     format: percentPoints,
   },
 ];
+const paymentColumns = [
+  { key: "payment_type_desc", label: "Payment Type" },
+  { key: "trip_count", label: "Trips", numeric: true, format: integer },
+  { key: "total_revenue", label: "Revenue", numeric: true, format: money },
+  { key: "avg_fare_amount", label: "Avg Fare", numeric: true, format: money },
+  { key: "avg_tip_amount", label: "Avg Tip", numeric: true, format: money },
+];
+
+const networkRouteRows = computed(() => {
+  if (routeLens.value === "airport") {
+    return routes.value.top_airport_routes || [];
+  }
+
+  if (routeLens.value === "interborough") {
+    return routes.value.top_inter_borough_routes || [];
+  }
+
+  return routes.value.top_routes || [];
+});
+const networkTableTitle = computed(() => {
+  if (routeLens.value === "airport") {
+    return "Airport Routes";
+  }
+
+  if (routeLens.value === "interborough") {
+    return "Inter-Borough Routes";
+  }
+
+  return "Top Routes";
+});
+const forecastMetricColor = computed(() => {
+  if (forecastMetric.value === "R2") {
+    return "#5cffa8";
+  }
+
+  if (forecastMetric.value === "MAE") {
+    return "#ffd23f";
+  }
+
+  return "#ff5d8f";
+});
+const tableConfigs = computed(() => ({
+  forecast: {
+    title: "Largest Zone Forecast Misses",
+    eyebrow: "Forecast",
+    rows: forecast.value.zone_accuracy || [],
+    columns: forecastZoneColumns,
+  },
+  routes: {
+    title: "Route Ranking",
+    eyebrow: "Network",
+    rows: routes.value.top_routes || [],
+    columns: routeColumns,
+  },
+  zones: {
+    title: "Zone Rank Change",
+    eyebrow: "Spatial",
+    rows: spatial.value.zone_rank_change || [],
+    columns: zoneRankColumns,
+  },
+  payments: {
+    title: "Payment Type Summary",
+    eyebrow: "Business",
+    rows: business.value.payment_type || [],
+    columns: paymentColumns,
+  },
+}));
+const activeTable = computed(() => tableConfigs.value[tableSource.value] || tableConfigs.value.forecast);
+const filteredTableRows = computed(() => {
+  const query = tableSearch.value.trim().toLowerCase();
+  const rows = activeTable.value.rows || [];
+
+  if (!query) {
+    return rows;
+  }
+
+  return rows.filter((row) =>
+    Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(query))
+  );
+});
 
 const monthlyForecastLong = computed(() =>
   actualPredictedLong(forecast.value.monthly_actual_predicted || [], "year_month")
@@ -411,6 +628,44 @@ function actualPredictedLong(rows, xKey) {
   ]);
 }
 
+function updateCommandControl(key, value) {
+  const handlers = {
+    selectedYear: () => {
+      selectedYear.value = value;
+    },
+    selectedBorough: () => {
+      selectedBorough.value = value;
+    },
+    selectedHour: () => {
+      selectedHour.value = Number(value);
+    },
+    routeLens: () => {
+      routeLens.value = value;
+    },
+    routeLimit: () => {
+      routeLimit.value = Number(value);
+    },
+    forecastMetric: () => {
+      forecastMetric.value = value;
+    },
+    forecastZoneLimit: () => {
+      forecastZoneLimit.value = Number(value);
+    },
+    tableSource: () => {
+      tableSource.value = value;
+      tableSearch.value = "";
+    },
+    tableLimit: () => {
+      tableLimit.value = Number(value);
+    },
+    tableSearch: () => {
+      tableSearch.value = value;
+    },
+  };
+
+  handlers[key]?.();
+}
+
 async function loadFilters() {
   const result = await api.filters();
   years.value = result.data.years || [];
@@ -431,9 +686,9 @@ async function loadAll() {
       api.overview({ year: selectedYear.value, zone_limit: 20, route_limit: 12 }),
       api.temporalStory(params),
       api.spatialStory({ year: selectedYear.value, hour: selectedHour.value, zone_limit: 25 }),
-      api.routesStory({ route_limit: 25 }),
+      api.routesStory({ route_limit: routeLimit.value }),
       api.businessStory({ year: selectedYear.value }),
-      api.forecastStory({ zone_limit: 300 }),
+      api.forecastStory({ zone_limit: forecastZoneLimit.value }),
     ]);
 
     overview.value = overviewResult.data;
@@ -454,7 +709,7 @@ async function reloadAll() {
   await loadAll();
 }
 
-watch([selectedYear, selectedBorough, selectedHour], loadAll);
+watch([selectedYear, selectedBorough, selectedHour, routeLimit, forecastZoneLimit], loadAll);
 
 onMounted(async () => {
   await loadFilters();

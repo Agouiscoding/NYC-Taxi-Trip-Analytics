@@ -82,7 +82,7 @@ function render() {
   const x = d3.scaleBand().domain(xDomain).range([0, innerWidth]).padding(0.04);
   const y = d3.scaleBand().domain(yDomain).range([0, innerHeight]).padding(0.06);
   const color = d3
-    .scaleSequential(d3.interpolateYlGnBu)
+    .scaleSequential(d3.interpolateRgbBasis(["#111827", "#4dd6ff", "#ffd23f", "#ff5d8f"]))
     .domain([0, d3.max(rows, (row) => row.__value) || 1]);
   const tooltip = d3.select(root.value).append("div").attr("class", "chart-tooltip");
   const svg = d3.select(root.value).append("svg").attr("viewBox", `0 0 ${width} ${height}`);
@@ -92,6 +92,8 @@ function render() {
     .selectAll("rect")
     .data(rows)
     .join("rect")
+    .attr("class", "heat-cell")
+    .style("--cell-delay", (_row, index) => `${index * 7 + 120}ms`)
     .attr("x", (row) => x(row[props.xKey]))
     .attr("y", (row) => y(row[props.yKey]))
     .attr("width", x.bandwidth())
@@ -99,7 +101,7 @@ function render() {
     .attr("rx", 2)
     .attr("fill", (row) => color(row.__value))
     .on("mouseenter", function (event, row) {
-      d3.select(this).attr("stroke", "#17202a").attr("stroke-width", 1.5);
+      d3.select(this).attr("stroke", "#ffd23f").attr("stroke-width", 1.5);
       tooltip
         .style("opacity", 1)
         .html(

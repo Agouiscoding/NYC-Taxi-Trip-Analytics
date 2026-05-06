@@ -83,7 +83,7 @@
           :data="zoneProfiles"
           label-key="pickup_zone"
           value-key="total_trips"
-          color="#0f1720"
+          color="#ffd23f"
           :limit="10"
           :height="310"
         />

@@ -5,30 +5,29 @@
       <h2>{{ title }}</h2>
     </div>
 
-    <div class="command-controls">
-      <label>
-        <span>Year</span>
-        <select :value="year" @change="$emit('update:year', normalizedYear($event.target.value))">
-          <option :value="null">All</option>
-          <option v-for="item in years" :key="item" :value="item">{{ item }}</option>
-        </select>
-      </label>
-
-      <label>
-        <span>Borough</span>
-        <select :value="borough" @change="$emit('update:borough', $event.target.value)">
-          <option value="">All</option>
-          <option v-for="item in boroughs" :key="item" :value="item">{{ item }}</option>
-        </select>
-      </label>
-
-      <label>
-        <span>Hour</span>
-        <select :value="hour" @change="$emit('update:hour', Number($event.target.value))">
-          <option v-for="item in hours" :key="item" :value="item">
-            {{ String(item).padStart(2, "0") }}:00
+    <div v-if="controls.length" class="command-controls">
+      <label v-for="control in controls" :key="control.key">
+        <span>{{ control.label }}</span>
+        <select
+          v-if="control.type !== 'search'"
+          :value="stringValue(control.value)"
+          @change="emitControl(control, $event.target.value)"
+        >
+          <option
+            v-for="option in control.options"
+            :key="`${control.key}-${stringValue(option.value)}`"
+            :value="stringValue(option.value)"
+          >
+            {{ option.label }}
           </option>
         </select>
+        <input
+          v-else
+          type="search"
+          :value="control.value"
+          :placeholder="control.placeholder || 'Search'"
+          @input="$emit('update:control', control.key, $event.target.value)"
+        />
       </label>
 
       <button class="icon-button command-refresh" type="button" title="Reload data" @click="$emit('reload')">
@@ -42,44 +41,30 @@
 import { RefreshCw } from "lucide-vue-next";
 
 defineProps({
-  eyebrow: {
-    type: String,
-    default: "MongoDB Atlas + FastAPI + Vue/D3",
-  },
   title: {
     type: String,
     required: true,
   },
-  years: {
+  controls: {
     type: Array,
     default: () => [],
-  },
-  boroughs: {
-    type: Array,
-    default: () => [],
-  },
-  hours: {
-    type: Array,
-    default: () => [],
-  },
-  year: {
-    type: Number,
-    default: null,
-  },
-  borough: {
-    type: String,
-    default: "",
-  },
-  hour: {
-    type: Number,
-    default: 18,
   },
 });
 
-defineEmits(["update:year", "update:borough", "update:hour", "reload"]);
+const emit = defineEmits(["update:control", "reload"]);
 
-function normalizedYear(value) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) && value !== "" ? numeric : null;
+function stringValue(value) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function emitControl(control, rawValue) {
+  const matchedOption = control.options.find((option) => stringValue(option.value) === rawValue);
+  let value = matchedOption ? matchedOption.value : rawValue;
+
+  if (control.valueType === "number" && value !== null && value !== "") {
+    value = Number(value);
+  }
+
+  emit("update:control", control.key, value);
 }
 </script>

@@ -46,6 +46,9 @@ let geojson = null;
 let svgSelection = null;
 let zoomBehavior = null;
 
+const NO_DATA_COLOR = "#111827";
+const ZONE_PALETTE = ["#18304d", "#2e8fb3", "#5eead4", "#ffd23f", "#ff5d8f"];
+
 function featureId(feature) {
   return Number(feature.properties.LocationID);
 }
@@ -77,10 +80,13 @@ async function render() {
     props.metrics.map((row) => [Number(row[props.idKey]), Number(row[props.metricKey] || 0)])
   );
   const rowsById = new Map(props.metrics.map((row) => [Number(row[props.idKey]), row]));
-  const maxValue = d3.max([...values.values()]) || 1;
-  const color = d3
-    .scaleSequential(d3.interpolateRgbBasis(["#f0f2f4", "#f7c948", "#d44a5f"]))
-    .domain([0, maxValue]);
+  const positiveValues = [...values.values()].filter((value) => Number.isFinite(value) && value > 0).sort(d3.ascending);
+  const maxValue = d3.max(positiveValues) || 1;
+  const capValue = d3.quantileSorted(positiveValues, 0.95) || maxValue;
+  const isCapped = capValue < maxValue;
+  const intensity = d3.scaleSqrt().domain([0, capValue]).range([0, 1]).clamp(true);
+  const interpolateZoneColor = d3.interpolateRgbBasis(ZONE_PALETTE);
+  const color = (value) => interpolateZoneColor(intensity(value));
   const projection = d3.geoMercator().fitExtent(
     [
       [margin, margin],
@@ -118,15 +124,15 @@ async function render() {
     .attr("d", path)
     .attr("fill", (feature) => {
       const value = values.get(featureId(feature));
-      return value ? color(value) : "#eef2f5";
+      return value ? color(value) : NO_DATA_COLOR;
     })
-    .attr("stroke", "#ffffff")
+    .attr("stroke", "rgba(255,255,255,0.28)")
     .attr("stroke-width", 0.7)
     .style("cursor", (feature) => (values.has(featureId(feature)) ? "pointer" : "default"))
     .on("mouseenter", function (event, feature) {
       const value = values.get(featureId(feature)) || 0;
       const row = rowsById.get(featureId(feature)) || {};
-      d3.select(this).attr("stroke", "#17202a").attr("stroke-width", 1.6).raise();
+      d3.select(this).attr("stroke", "#ffd23f").attr("stroke-width", 1.6).raise();
       tooltip
         .style("opacity", 1)
         .html(
@@ -140,7 +146,7 @@ async function render() {
       tooltip.style("left", `${event.offsetX + 14}px`).style("top", `${event.offsetY + 14}px`);
     })
     .on("mouseleave", function () {
-      d3.select(this).attr("stroke", "#ffffff").attr("stroke-width", 0.7);
+      d3.select(this).attr("stroke", "rgba(255,255,255,0.28)").attr("stroke-width", 0.7);
       tooltip.style("opacity", 0);
     })
     .on("click", (event, feature) => {
@@ -169,7 +175,7 @@ async function render() {
     gradient
       .append("stop")
       .attr("offset", `${stop * 100}%`)
-      .attr("stop-color", color(stop * maxValue));
+      .attr("stop-color", color(stop * capValue));
   });
 
   svg
@@ -194,7 +200,7 @@ async function render() {
     .attr("text-anchor", "end")
     .attr("x", legendX + legendWidth)
     .attr("y", legendY + 24)
-    .text(d3.format(".2s")(maxValue));
+    .text(`${isCapped ? "P95 " : ""}${d3.format(".2s")(capValue)}`);
 }
 
 function zoomBy(scale) {
