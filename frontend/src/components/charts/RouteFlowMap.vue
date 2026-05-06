@@ -89,7 +89,7 @@ async function render() {
   const maxTrips = d3.max(rows, (route) => Number(route.trip_count)) || 1;
   const stroke = d3.scaleLinear().domain([0, maxTrips]).range([1.2, 8]);
   const color = d3
-    .scaleSequential(d3.interpolateRgbBasis(["#21bfd0", "#f7c948", "#d44a5f"]))
+    .scaleSequential(d3.interpolateRgbBasis(["#4dd6ff", "#ffd23f", "#ff5d8f"]))
     .domain([0, maxTrips]);
 
   d3.select(root.value).selectAll("svg").remove();
@@ -112,8 +112,8 @@ async function render() {
     .data(zones.features)
     .join("path")
     .attr("d", path)
-    .attr("fill", "#edf2f5")
-    .attr("stroke", "#ffffff")
+    .attr("fill", "#111827")
+    .attr("stroke", "rgba(255,255,255,0.18)")
     .attr("stroke-width", 0.7);
 
   layer
@@ -164,8 +164,8 @@ async function render() {
     .attr("cx", (row) => row.point[0])
     .attr("cy", (row) => row.point[1])
     .attr("r", (row) => (row.type === "pickup" ? 3.4 : 2.4))
-    .attr("fill", (row) => (row.type === "pickup" ? "#17202a" : "#ffffff"))
-    .attr("stroke", "#17202a")
+    .attr("fill", (row) => (row.type === "pickup" ? "#ffd23f" : "#4dd6ff"))
+    .attr("stroke", "#05070d")
     .attr("stroke-width", 1);
 }
 

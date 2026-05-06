@@ -14,12 +14,18 @@ from config.config import (
     LOOKUP_PATH,
     INGESTION_APP_NAME,
     INGESTION_SUMMARY_PATH,
+    SPARK_DEFAULT_PARALLELISM,
+    SPARK_DRIVER_MEMORY,
+    SPARK_EXECUTOR_MEMORY,
+    SPARK_MASTER,
+    SPARK_SQL_SHUFFLE_PARTITIONS,
     PASSENGER_COUNT_COL,
     TRIP_DISTANCE_COL,
     FARE_AMOUNT_COL,
     TOTAL_AMOUNT_COL,
     PICKUP_ID_COL,
     DROPOFF_ID_COL,
+    is_remote_path,
 )
 
 
@@ -30,32 +36,64 @@ from config.config import (
 #     return SparkSession.builder.appName(app_name).getOrCreate()
 
 def create_spark_session(app_name: str = INGESTION_APP_NAME) -> SparkSession:
+    builder = SparkSession.builder.appName(app_name)
+
+    if SPARK_MASTER:
+        builder = builder.master(SPARK_MASTER)
+
     return (
-        SparkSession.builder
-        .appName(app_name)
-        .master("local[*]")
-        .config("spark.driver.memory", "20g")
-        .config("spark.executor.memory", "8g")
-        .config("spark.sql.shuffle.partitions", "8")
-        .config("spark.default.parallelism", "8")
+        builder
+        .config("spark.driver.memory", SPARK_DRIVER_MEMORY)
+        .config("spark.executor.memory", SPARK_EXECUTOR_MEMORY)
+        .config("spark.sql.shuffle.partitions", SPARK_SQL_SHUFFLE_PARTITIONS)
+        .config("spark.default.parallelism", SPARK_DEFAULT_PARALLELISM)
         .config("spark.sql.adaptive.enabled", "true")
         .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
         .getOrCreate()
     )
 
 
+def get_local_parquet_file_paths(raw_data_dir: str | Path) -> list[str]:
+    raw_path = Path(raw_data_dir)
+    file_paths = sorted(str(p) for p in raw_path.glob("*.parquet"))
+    if not file_paths:
+        raise FileNotFoundError(f"No parquet files found in: {raw_path}")
+    return file_paths
 
-def get_parquet_file_paths(raw_data_dir: Path) -> list[str]:
+
+def get_remote_parquet_file_paths(spark: SparkSession, raw_data_dir: str) -> list[str]:
+    """
+    List Parquet files through Hadoop FileSystem so hdfs:// and s3a:// paths
+    work in cluster mode without using local Python glob.
+    """
+    jvm = spark._jvm
+    hadoop_path = jvm.org.apache.hadoop.fs.Path(raw_data_dir)
+    filesystem = hadoop_path.getFileSystem(spark._jsc.hadoopConfiguration())
+
+    file_paths = []
+    for status in filesystem.listStatus(hadoop_path):
+        path = status.getPath()
+        if status.isFile() and path.getName().endswith(".parquet"):
+            file_paths.append(path.toString())
+
+    if not file_paths:
+        raise FileNotFoundError(f"No parquet files found in: {raw_data_dir}")
+    return sorted(file_paths)
+
+
+def get_parquet_file_paths(raw_data_dir: str | Path, spark: SparkSession | None = None) -> list[str]:
     """
     Find all parquet files under data/raw/.
 
     We use Python's glob instead of passing '*.parquet' directly into Spark.
     This avoids the noisy metadata warning seen with wildcard paths.
     """
-    file_paths = sorted(str(p) for p in raw_data_dir.glob("*.parquet"))
-    if not file_paths:
-        raise FileNotFoundError(f"No parquet files found in: {raw_data_dir}")
-    return file_paths
+    if is_remote_path(raw_data_dir):
+        if spark is None:
+            raise ValueError("A SparkSession is required to list remote Parquet files.")
+        return get_remote_parquet_file_paths(spark, str(raw_data_dir))
+
+    return get_local_parquet_file_paths(raw_data_dir)
 
 
 def normalize_trip_schema(df: DataFrame) -> DataFrame:
@@ -82,7 +120,7 @@ def normalize_trip_schema(df: DataFrame) -> DataFrame:
     return df
 
 
-def load_raw_trips(spark: SparkSession, raw_data_dir: Path = RAW_DATA_DIR) -> DataFrame:
+def load_raw_trips(spark: SparkSession, raw_data_dir: str | Path = RAW_DATA_DIR) -> DataFrame:
     """
     Load all raw Yellow Taxi parquet files one by one, normalize their schema,
     and union them into a single Spark DataFrame.
@@ -90,7 +128,7 @@ def load_raw_trips(spark: SparkSession, raw_data_dir: Path = RAW_DATA_DIR) -> Da
     Reading files individually is more robust than reading all parquet files
     at once when monthly schemas are not perfectly identical.
     """
-    file_paths = get_parquet_file_paths(raw_data_dir)
+    file_paths = get_parquet_file_paths(raw_data_dir, spark)
 
     dataframes = []
     for file_path in file_paths:
@@ -159,13 +197,36 @@ def build_dataframe_summary(df: DataFrame, name: str) -> str:
     )
 
 
-def write_summary_file(content: str, output_path: str) -> None:
+def write_text_file(content: str, output_path: str, spark: SparkSession | None = None) -> None:
     """
-    Write the ingestion summary text to a file under data/processed/.
+    Write a small text artifact locally or through Hadoop FileSystem.
     """
+    if is_remote_path(output_path):
+        if spark is None:
+            raise ValueError("A SparkSession is required to write remote text files.")
+        jvm = spark._jvm
+        hadoop_path = jvm.org.apache.hadoop.fs.Path(output_path)
+        filesystem = hadoop_path.getFileSystem(spark._jsc.hadoopConfiguration())
+        parent = hadoop_path.getParent()
+        if parent is not None:
+            filesystem.mkdirs(parent)
+        output_stream = filesystem.create(hadoop_path, True)
+        try:
+            output_stream.write(bytearray(content, "utf-8"))
+        finally:
+            output_stream.close()
+        return
+
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
     output_file.write_text(content, encoding="utf-8")
+
+
+def write_summary_file(content: str, output_path: str, spark: SparkSession | None = None) -> None:
+    """
+    Write the ingestion summary text under data/processed/.
+    """
+    write_text_file(content, output_path, spark)
 
 
 def main() -> None:
@@ -189,7 +250,7 @@ def main() -> None:
     ]
     final_summary = "\n".join(summary_parts)
 
-    write_summary_file(final_summary, INGESTION_SUMMARY_PATH)
+    write_summary_file(final_summary, INGESTION_SUMMARY_PATH, spark)
 
     spark.stop()
 

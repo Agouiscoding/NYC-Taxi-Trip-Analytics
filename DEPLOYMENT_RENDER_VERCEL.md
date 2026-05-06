@@ -6,7 +6,7 @@ This guide deploys the project without Oracle Cloud.
 Frontend: Vercel
 Backend: Render Web Service
 Database: MongoDB Atlas
-Big data pipeline: local only
+Big data pipeline: local laptop or external Spark/Hadoop cluster, not Render/Vercel
 ```
 
 Do not deploy `data/`, `outputs/`, `venv/`, or `frontend/node_modules/`. The online app only needs curated MongoDB collections, backend code, and frontend source.
@@ -201,4 +201,4 @@ MongoDB export script
 large CSV generation
 ```
 
-Run those locally, upload curated outputs to MongoDB Atlas, then let the deployed app read from Atlas.
+Run those locally or on an external Spark/Hadoop cluster, upload curated outputs to MongoDB Atlas, then let the deployed app read from Atlas.

@@ -103,7 +103,7 @@ function render() {
   const color = d3
     .scaleOrdinal()
     .domain(series.map((item) => item.key))
-    .range(["#0f1720", "#21bfd0", "#f7c948", "#d44a5f", "#23845a", "#7c6f5f", "#6b7280"]);
+    .range(["#ffd23f", "#4dd6ff", "#ff5d8f", "#5cffa8", "#8a7cff", "#ff9f1c", "#9ca3af"]);
 
   const tooltip = d3.select(root.value).append("div").attr("class", "chart-tooltip");
   const svg = d3
@@ -124,6 +124,35 @@ function render() {
     .x((row) => x(row.__x))
     .y((row) => y(row.__y))
     .curve(d3.curveMonotoneX);
+  const area = d3
+    .area()
+    .x((row) => x(row.__x))
+    .y0(innerHeight)
+    .y1((row) => y(row.__y))
+    .curve(d3.curveMonotoneX);
+  const defs = svg.append("defs");
+  const gradientIds = series.map((item, index) => {
+    const id = `line-fill-${props.yKey}-${index}-${Math.random().toString(16).slice(2)}`;
+    const gradient = defs
+      .append("linearGradient")
+      .attr("id", id)
+      .attr("x1", "0")
+      .attr("x2", "0")
+      .attr("y1", "0")
+      .attr("y2", "1");
+
+    gradient.append("stop").attr("offset", "0%").attr("stop-color", color(item.key)).attr("stop-opacity", 0.26);
+    gradient.append("stop").attr("offset", "100%").attr("stop-color", color(item.key)).attr("stop-opacity", 0);
+    return id;
+  });
+
+  plot
+    .selectAll(".line-area")
+    .data(series)
+    .join("path")
+    .attr("class", "line-area")
+    .attr("fill", (_item, index) => `url(#${gradientIds[index]})`)
+    .attr("d", (item) => area(item.values));
 
   plot
     .selectAll(".line-series")
@@ -133,6 +162,7 @@ function render() {
     .attr("fill", "none")
     .attr("stroke", (item) => color(item.key))
     .attr("stroke-width", 2.4)
+    .attr("pathLength", 1)
     .attr("d", (item) => line(item.values));
 
   plot
@@ -153,8 +183,8 @@ function render() {
   }
 
   const focus = plot.append("g").style("display", "none");
-  focus.append("line").attr("y1", 0).attr("y2", innerHeight).attr("stroke", "#17202a").attr("stroke-dasharray", "3 4");
-  focus.append("circle").attr("r", 4).attr("fill", "#17202a").attr("stroke", "#ffffff").attr("stroke-width", 2);
+  focus.append("line").attr("y1", 0).attr("y2", innerHeight).attr("stroke", "#ffd23f").attr("stroke-dasharray", "3 4");
+  focus.append("circle").attr("r", 4).attr("fill", "#ffd23f").attr("stroke", "#05070d").attr("stroke-width", 2);
 
   plot
     .append("rect")

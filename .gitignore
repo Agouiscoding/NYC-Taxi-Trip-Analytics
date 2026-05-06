@@ -1,121 +1,67 @@
-# ================================
-# Python
-# ================================
+# Python cache and tooling
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
 *.py[cod]
-*.egg
-*.egg-info/
-.eggs/
-dist/
-build/
+*$py.class
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
+*.egg-info/
 
-# ================================
-# Virtual Environment
-# ================================
-venv/
-.venv/
-env/
-ENV/
+# Local Python environment
+/venv/
 
-# ================================
-# Jupyter Notebook
-# ================================
-.ipynb_checkpoints/
+# Frontend dependencies and build output
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.vite/
 
-# ================================
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+!frontend/.env.example
+!frontend/.env.*.example
+
 # Logs
-# ================================
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
 
-# ================================
-# OS Files
-# ================================
+# OS and editor files
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
 
-# ================================
-# Spark / Hadoop temp files
-# ================================
+# Spark / Hadoop local runtime files
 metastore_db/
 spark-warehouse/
 derby.log
 _temporary/
-*.crc
 _SUCCESS
-
-# Windows Spark temp
-C:/Users/*/AppData/Local/Temp/
+*.crc
 *.tmp
 
-# ================================
-# Data files
-# ================================
-data/raw/*
-data/processed/
+# Pipeline data generated locally
+/data/processed/
 
-# If you want to keep directory placeholders later, use:
-# !data/raw/.gitkeep
-# !data/processed/.gitkeep
+# Raw TLC data is ignored by default, except the selected project dataset.
+/data/raw/*
+!/data/raw/
+!/data/raw/yellow_tripdata_2021-*.parquet
+!/data/raw/yellow_tripdata_2022-*.parquet
+!/data/raw/yellow_tripdata_2023-*.parquet
+!/data/raw/yellow_tripdata_2024-*.parquet
 
-# ================================
-# Output files
-# ================================
-outputs/*
-*.csv
-*.parquet
-
-# Selected raw TLC parquet files that are intentionally versioned.
-# Keep these exceptions after the global *.parquet ignore rule.
-!data/raw/
-!data/raw/yellow_tripdata_2021-*.parquet
-!data/raw/yellow_tripdata_2022-*.parquet
-!data/raw/yellow_tripdata_2023-*.parquet
-!data/raw/yellow_tripdata_2024-*.parquet
-
-# ================================
-# Frontend / Node
-# ================================
-node_modules/
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-coverage/
-
-# ================================
-# IDE
-# ================================
-.vscode/
-.idea/
-
-# ================================
-# Environment variables
-# ================================
-.env
-.env.*
-!.env.example
-!*.env.example
-
-# ================================
-# Large files / checkpoints
-# ================================
-*.pickle
+# Generated analytics, forecast, model, and Spark package artifacts
+/outputs/
+/dist/
+/cleaned_sample.csv
+/src/visualization/dashboard/data/
 *.pkl
+*.pickle
 *.joblib
-
-# ================================
-# Editor swap files
-# ================================
-*.swp
-*.swo

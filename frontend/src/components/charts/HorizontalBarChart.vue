@@ -92,6 +92,8 @@ function render() {
     .selectAll("rect")
     .data(rows)
     .join("rect")
+    .attr("class", "bar-mark bar-mark--horizontal")
+    .style("--bar-delay", (_row, index) => `${index * 26 + 120}ms`)
     .attr("x", 0)
     .attr("y", (row) => y(row.label))
     .attr("width", (row) => x(row.value))

@@ -242,7 +242,7 @@ def main() -> None:
     # print("\n===== borough_hour_features preview =====")
     # borough_hour_df.show(30, truncate=False)
 
-    borough_hour_df.write.mode("overwrite").parquet(BOROUGH_HOUR_FEATURES_PATH)
+    borough_hour_df.write.mode("overwrite").partitionBy("year", "month").parquet(BOROUGH_HOUR_FEATURES_PATH)
     print(f"\nborough_hour_features saved to: {BOROUGH_HOUR_FEATURES_PATH}")
 
     # export_sample_csv(borough_hour_df)
