@@ -30,7 +30,7 @@ Raw TLC trip data
   -> Vue + D3 frontend dashboard
 ```
 
-The online deployment does not run Spark or model training. It only serves already-computed dashboard tables from MongoDB Atlas.
+The online deployment does not run Spark or model training. It only serves already-computed dashboard tables from MongoDB Atlas. The Spark pipeline can run on a local laptop for development or on an external Hadoop/Spark cluster for production-scale batch processing.
 
 线上部署环境不运行 Spark，也不训练模型。线上只负责从 MongoDB Atlas 读取已经计算好的 dashboard 表并展示。
 

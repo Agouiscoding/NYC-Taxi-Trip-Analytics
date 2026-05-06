@@ -287,7 +287,7 @@ def main() -> None:
     # print("\n===== zone_hour_features preview =====")
     # zone_hour_df.show(30, truncate=False)
 
-    zone_hour_df.write.mode("overwrite").parquet(ZONE_HOUR_FEATURES_PATH)
+    zone_hour_df.write.mode("overwrite").partitionBy("year", "month").parquet(ZONE_HOUR_FEATURES_PATH)
     print(f"\nzone_hour_features saved to: {ZONE_HOUR_FEATURES_PATH}")
 
     zone_hour_export_df = spark.read.parquet(ZONE_HOUR_FEATURES_PATH)

@@ -311,7 +311,7 @@ def main() -> None:
     # print("\n===== trip_enriched preview =====")
     # trip_enriched_df.show(30, truncate=False)
 
-    trip_enriched_df.write.mode("overwrite").parquet(TRIP_ENRICHED_PATH)
+    trip_enriched_df.write.mode("overwrite").partitionBy("year", "month").parquet(TRIP_ENRICHED_PATH)
 
     print(f"\ntrip_enriched saved to: {TRIP_ENRICHED_PATH}")
 

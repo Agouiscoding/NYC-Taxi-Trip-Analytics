@@ -25,6 +25,7 @@ from src.ingestion.load_raw_data import (
     create_spark_session,
     load_raw_trips,
     load_zone_lookup,
+    write_text_file,
 )
 
 def select_needed_columns(df: DataFrame) -> DataFrame:
@@ -189,13 +190,11 @@ def build_cleaning_report() -> str:
     )
 
 
-def write_report_file(content: str, output_path: str) -> None:
+def write_report_file(content: str, output_path: str, spark=None) -> None:
     """
     Save the cleaning report to a text file.
     """
-    output_file = Path(output_path)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(content, encoding="utf-8")
+    write_text_file(content, output_path, spark)
 
 
 # def clean_trips(df: DataFrame, zones_df: DataFrame):
@@ -273,9 +272,14 @@ def main() -> None:
 
     cleaned_df, report = clean_trips(raw_trips_df, zones_df)
 
-    cleaned_df = cleaned_df.coalesce(12)
-    cleaned_df.write.mode("overwrite").parquet(CLEANED_TRIPS_PATH)
-    write_report_file(report, CLEANING_REPORT_PATH)
+    cleaned_df = (
+        cleaned_df
+        .withColumn("year", F.year("pickup_ts"))
+        .withColumn("month", F.month("pickup_ts"))
+        .coalesce(12)
+    )
+    cleaned_df.write.mode("overwrite").partitionBy("year", "month").parquet(CLEANED_TRIPS_PATH)
+    write_report_file(report, CLEANING_REPORT_PATH, spark)
 
     print(report)
     print(f"Cleaning completed. Cleaned data saved to: {CLEANED_TRIPS_PATH}")

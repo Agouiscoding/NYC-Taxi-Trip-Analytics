@@ -1,6 +1,68 @@
 # NYC-Taxi-Trip-Analytics
 A scalable big data project for NYC taxi trip analytics and demand forecasting using PySpark, Parquet, and spatial-temporal analysis.
 
+## Production Scalability / Cluster-Ready Mode
+
+This project is designed to run locally for development and on a Hadoop/Spark
+cluster for production-scale batch analytics.
+
+Local laptop mode remains the default:
+
+```powershell
+$env:SPARK_MASTER="local[*]"
+$env:DATA_ROOT="D:/NYUcourse/big data/test/NYC-Taxi-Trip-Analytics/data"
+python src/cleaning/clean_trips.py
+```
+
+Cluster mode uses the same PySpark jobs with external configuration:
+
+```bash
+export SPARK_MASTER=yarn
+export DATA_ROOT=hdfs:///user/nyc_taxi/data
+export SPARK_DRIVER_MEMORY=8g
+export SPARK_EXECUTOR_MEMORY=8g
+export SPARK_SQL_SHUFFLE_PARTITIONS=200
+
+spark-submit \
+  --master yarn \
+  --deploy-mode cluster \
+  --num-executors 8 \
+  --executor-cores 4 \
+  --executor-memory 8g \
+  --py-files dist/nyc_taxi_project.zip \
+  src/cleaning/clean_trips.py
+```
+
+Build the zip used by `--py-files` from Windows PowerShell:
+
+```powershell
+.\scripts\build_spark_package.ps1
+```
+
+The data root is configurable through `DATA_ROOT`. For local development it
+points to the repository `data/` directory. In production it can point to HDFS
+or object storage such as:
+
+```text
+hdfs:///user/nyc_taxi/data
+s3a://nyc-taxi-data/data
+```
+
+The Spark ingestion layer supports both local file listing and Hadoop
+FileSystem listing for `hdfs://` / `s3a://` paths. Large processed tables are
+written as Parquet and partitioned by `year` and `month` where applicable, so
+the pipeline can scale by time partition instead of depending on one local
+machine and one flat directory.
+
+The production serving architecture intentionally keeps raw trip records and
+large processed Parquet tables out of MongoDB. MongoDB stores only curated,
+dashboard-ready aggregate tables. FastAPI and Vue serve those precomputed
+tables; they do not run Spark or model training in the web deployment.
+
+Kafka and Spark Streaming are not required for this project scope because the
+core problem is historical batch analytics and forecasting. They would be an
+optional extension for real-time trip ingestion or live hotspot monitoring.
+
 ## 目前先把代码运行起来，后期有时间还可以做：
 （不清楚往年项目和打分情况，以及别的组大概做成什么样，所以这部分待定）<br>
 1.数据规模从2023-2024扩充到2009-2024<br>
