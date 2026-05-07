@@ -270,16 +270,19 @@ OPTIONAL_TABLES: tuple[TableSpec, ...] = (
         (("day_of_week", "hour"),),
     ),
     TableSpec(
-        "zone_centroids",
-        PROJECT_ROOT / "outputs" / "tables" / "map" / "csv" / "zone_centroids.csv",
-        "map_zone_centroids",
-        (("LocationID",), ("borough",)),
-    ),
-    TableSpec(
         "od_flow_hour",
         PROJECT_ROOT / "outputs" / "tables" / "map" / "csv" / "od_flow_hour",
         "map_od_flow_hour",
         (("hour", "PULocationID", "DOLocationID"), ("hour", "route_rank_in_hour")),
+    ),
+    TableSpec(
+        "od_flow_hour_by_borough",
+        PROJECT_ROOT / "outputs" / "tables" / "map" / "csv" / "od_flow_hour_by_borough",
+        "map_od_flow_hour_by_borough",
+        (
+            ("scope_borough", "hour", "PULocationID", "DOLocationID"),
+            ("scope_borough", "hour", "route_rank_in_borough_hour"),
+        ),
     ),
     TableSpec(
         "od_flow_year_month",
@@ -288,10 +291,13 @@ OPTIONAL_TABLES: tuple[TableSpec, ...] = (
         (("year_month", "PULocationID", "DOLocationID"), ("year_month", "route_rank_in_year_month")),
     ),
     TableSpec(
-        "map_replay_sample",
-        PROJECT_ROOT / "outputs" / "tables" / "map" / "csv" / "map_replay_sample",
-        "map_replay_sample",
-        (("pickup_date", "hour"), ("PULocationID",), ("DOLocationID",)),
+        "od_flow_year_month_by_borough",
+        PROJECT_ROOT / "outputs" / "tables" / "map" / "csv" / "od_flow_year_month_by_borough",
+        "map_od_flow_year_month_by_borough",
+        (
+            ("scope_borough", "year_month", "PULocationID", "DOLocationID"),
+            ("scope_borough", "year_month", "route_rank_in_borough_year_month"),
+        ),
     ),
     TableSpec(
         "zone_profile_summary",
@@ -304,6 +310,29 @@ OPTIONAL_TABLES: tuple[TableSpec, ...] = (
         PROJECT_ROOT / "outputs" / "tables" / "profiles" / "csv" / "route_profile_summary",
         "profile_route_summary",
         (("route_rank",), ("PULocationID", "DOLocationID"), ("route_key",)),
+    ),
+    TableSpec(
+        "top_routes_by_borough",
+        PROJECT_ROOT / "outputs" / "tables" / "trip_route_analytics" / "csv" / "top_routes_by_borough",
+        "routes_top_routes_by_borough",
+        (("scope_borough", "route_rank_in_borough"), ("scope_borough", "PULocationID", "DOLocationID")),
+    ),
+    TableSpec(
+        "top_airport_routes_by_borough",
+        PROJECT_ROOT / "outputs" / "tables" / "trip_route_analytics" / "csv" / "top_airport_routes_by_borough",
+        "routes_top_airport_routes_by_borough",
+        (("scope_borough", "route_rank_in_borough"), ("scope_borough", "PULocationID", "DOLocationID")),
+    ),
+    TableSpec(
+        "top_inter_borough_routes_by_borough",
+        PROJECT_ROOT
+        / "outputs"
+        / "tables"
+        / "trip_route_analytics"
+        / "csv"
+        / "top_inter_borough_routes_by_borough",
+        "routes_top_inter_borough_routes_by_borough",
+        (("scope_borough", "route_rank_in_borough"), ("scope_borough", "PULocationID", "DOLocationID")),
     ),
 )
 

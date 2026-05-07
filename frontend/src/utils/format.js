@@ -45,9 +45,3 @@ export function decimal(value, digits = 1) {
 export function pct(value, digits = 1) {
   return `${(Number(value || 0) * 100).toFixed(digits)}%`;
 }
-
-export function labelize(value) {
-  return String(value || "")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}

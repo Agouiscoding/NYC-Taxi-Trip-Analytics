@@ -5,7 +5,7 @@
         <div class="product-brand__mark">NYC</div>
         <div>
           <p class="eyebrow">Taxi Operations</p>
-          <h1>Intelligence Console</h1>
+          <h1>Analytics Console</h1>
         </div>
       </div>
 

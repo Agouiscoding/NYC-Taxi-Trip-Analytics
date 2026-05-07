@@ -1,9 +1,8 @@
 """Build taxi zone centroid lookup for map layers.
 
 The TLC trip data only stores taxi zone IDs. This script derives stable
-longitude/latitude anchor points from the taxi zone GeoJSON so OD flow and
-replay layers can join zone IDs to coordinates without recalculating them in
-the browser.
+longitude/latitude anchor points from the taxi zone GeoJSON so OD flow layers
+can join zone IDs to coordinates without recalculating them in the browser.
 """
 
 from __future__ import annotations

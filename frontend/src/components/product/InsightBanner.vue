@@ -4,7 +4,7 @@
     <div class="insight-banner__copy">
       <p class="eyebrow">{{ eyebrow }}</p>
       <h2>{{ title }}</h2>
-      <p>{{ summary }}</p>
+      <p v-if="summary">{{ summary }}</p>
     </div>
     <div class="insight-banner__stats">
       <div v-for="item in stats" :key="item.label">
@@ -19,7 +19,7 @@
 defineProps({
   eyebrow: {
     type: String,
-    default: "Live analysis workspace",
+    default: "2021-2024 Yellow Taxi",
   },
   title: {
     type: String,
@@ -27,7 +27,7 @@ defineProps({
   },
   summary: {
     type: String,
-    required: true,
+    default: "",
   },
   stats: {
     type: Array,

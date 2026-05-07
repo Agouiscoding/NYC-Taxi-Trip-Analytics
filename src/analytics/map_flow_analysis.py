@@ -2,7 +2,7 @@
 
 Outputs are derived from the processed trip-level table and the existing
 pickup zone-hour feature table. They support pickup/dropoff maps, OD flow maps,
-zone balance maps, and approximate replay layers.
+and zone balance maps.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from pyspark import StorageLevel
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
@@ -37,11 +38,9 @@ from src.ingestion.load_raw_data import create_spark_session  # noqa: E402
 OUTPUT_DIR = TABLES_DIR / "map"
 PARQUET_OUTPUT_DIR = OUTPUT_DIR / "parquet"
 CSV_OUTPUT_DIR = OUTPUT_DIR / "csv"
-DEFAULT_CENTROIDS_CSV = CSV_OUTPUT_DIR / "zone_centroids.csv"
 
 
 TRIP_REQUIRED_COLUMNS = [
-    "pickup_ts",
     "dropoff_ts",
     "pickup_date",
     "year",
@@ -354,9 +353,9 @@ def build_zone_balance_hour(pickup_df: DataFrame, dropoff_df: DataFrame) -> Data
     )
 
 
-def build_od_flow_hour(trip_df: DataFrame, top_n: int) -> DataFrame:
+def build_od_flow_hour_base(trip_df: DataFrame) -> DataFrame:
     df = add_trip_metrics(trip_df).filter(F.col(PICKUP_ID_COL).isNotNull()).filter(F.col(DROPOFF_ID_COL).isNotNull())
-    flows = aggregate_trip_metrics(
+    return aggregate_trip_metrics(
         df,
         [
             "hour",
@@ -374,6 +373,8 @@ def build_od_flow_hour(trip_df: DataFrame, top_n: int) -> DataFrame:
         "pickup_date",
     )
 
+
+def build_od_flow_hour_from_flows(flows: DataFrame, top_n: int) -> DataFrame:
     rank_window = Window.partitionBy("hour").orderBy(F.desc("trip_count"), F.desc("total_revenue"))
     return (
         flows.withColumn("route_rank_in_hour", F.dense_rank().over(rank_window))
@@ -382,9 +383,38 @@ def build_od_flow_hour(trip_df: DataFrame, top_n: int) -> DataFrame:
     )
 
 
-def build_od_flow_year_month(trip_df: DataFrame, top_n: int) -> DataFrame:
+def build_od_flow_hour(trip_df: DataFrame, top_n: int) -> DataFrame:
+    return build_od_flow_hour_from_flows(build_od_flow_hour_base(trip_df), top_n)
+
+
+def add_flow_scope_borough(flows: DataFrame) -> DataFrame:
+    return (
+        flows.withColumn(
+            "scope_borough",
+            F.explode(F.array_distinct(F.array(F.col("pickup_borough"), F.col("dropoff_borough")))),
+        )
+        .filter(F.col("scope_borough").isNotNull())
+        .filter(F.col("scope_borough") != "")
+    )
+
+
+def build_od_flow_hour_by_borough_from_flows(flows: DataFrame, top_n: int) -> DataFrame:
+    rank_window = Window.partitionBy("hour", "scope_borough").orderBy(F.desc("trip_count"), F.desc("total_revenue"))
+    return (
+        add_flow_scope_borough(flows)
+        .withColumn("route_rank_in_borough_hour", F.dense_rank().over(rank_window))
+        .filter(F.col("route_rank_in_borough_hour") <= top_n)
+        .orderBy("hour", "scope_borough", "route_rank_in_borough_hour")
+    )
+
+
+def build_od_flow_hour_by_borough(trip_df: DataFrame, top_n: int) -> DataFrame:
+    return build_od_flow_hour_by_borough_from_flows(build_od_flow_hour_base(trip_df), top_n)
+
+
+def build_od_flow_year_month_base(trip_df: DataFrame) -> DataFrame:
     df = add_trip_metrics(trip_df).filter(F.col(PICKUP_ID_COL).isNotNull()).filter(F.col(DROPOFF_ID_COL).isNotNull())
-    flows = aggregate_trip_metrics(
+    return aggregate_trip_metrics(
         df,
         [
             "year",
@@ -404,6 +434,8 @@ def build_od_flow_year_month(trip_df: DataFrame, top_n: int) -> DataFrame:
         "pickup_date",
     )
 
+
+def build_od_flow_year_month_from_flows(flows: DataFrame, top_n: int) -> DataFrame:
     rank_window = Window.partitionBy("year_month").orderBy(F.desc("trip_count"), F.desc("total_revenue"))
     return (
         flows.withColumn("route_rank_in_year_month", F.dense_rank().over(rank_window))
@@ -412,88 +444,25 @@ def build_od_flow_year_month(trip_df: DataFrame, top_n: int) -> DataFrame:
     )
 
 
-def load_centroids(spark, path: Path) -> DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Centroid CSV not found: {path}. Run src/analytics/zone_centroids.py first."
-        )
+def build_od_flow_year_month(trip_df: DataFrame, top_n: int) -> DataFrame:
+    return build_od_flow_year_month_from_flows(build_od_flow_year_month_base(trip_df), top_n)
 
+
+def build_od_flow_year_month_by_borough_from_flows(flows: DataFrame, top_n: int) -> DataFrame:
+    rank_window = Window.partitionBy("year_month", "scope_borough").orderBy(
+        F.desc("trip_count"),
+        F.desc("total_revenue"),
+    )
     return (
-        spark.read.option("header", True)
-        .csv(str(path))
-        .select(
-            F.col("LocationID").cast("int").alias("LocationID"),
-            F.col("centroid_lon").cast("double").alias("centroid_lon"),
-            F.col("centroid_lat").cast("double").alias("centroid_lat"),
-        )
+        add_flow_scope_borough(flows)
+        .withColumn("route_rank_in_borough_year_month", F.dense_rank().over(rank_window))
+        .filter(F.col("route_rank_in_borough_year_month") <= top_n)
+        .orderBy("year", "month", "scope_borough", "route_rank_in_borough_year_month")
     )
 
 
-def build_map_replay_sample(
-    trip_df: DataFrame,
-    centroids_df: DataFrame,
-    sample_size: int,
-    seed: int,
-) -> DataFrame:
-    pickup_centroids = centroids_df.select(
-        F.col("LocationID").alias("pickup_join_id"),
-        F.col("centroid_lon").alias("pickup_lon"),
-        F.col("centroid_lat").alias("pickup_lat"),
-    )
-    dropoff_centroids = centroids_df.select(
-        F.col("LocationID").alias("dropoff_join_id"),
-        F.col("centroid_lon").alias("dropoff_lon"),
-        F.col("centroid_lat").alias("dropoff_lat"),
-    )
-
-    sampled = (
-        trip_df.filter(F.col(PICKUP_ID_COL).isNotNull())
-        .filter(F.col(DROPOFF_ID_COL).isNotNull())
-        .filter(F.col("pickup_ts").isNotNull())
-        .filter(F.col("dropoff_ts").isNotNull())
-        .orderBy(F.rand(seed))
-        .limit(sample_size)
-    )
-
-    joined = (
-        sampled.join(F.broadcast(pickup_centroids), sampled[PICKUP_ID_COL] == pickup_centroids["pickup_join_id"])
-        .join(F.broadcast(dropoff_centroids), sampled[DROPOFF_ID_COL] == dropoff_centroids["dropoff_join_id"])
-        .drop("pickup_join_id", "dropoff_join_id")
-        .withColumn("pickup_epoch_ms", F.unix_timestamp("pickup_ts") * F.lit(1000))
-        .withColumn("dropoff_epoch_ms", F.unix_timestamp("dropoff_ts") * F.lit(1000))
-        .withColumn(
-            "replay_trip_id",
-            F.row_number().over(Window.orderBy("pickup_ts", PICKUP_ID_COL, DROPOFF_ID_COL)),
-        )
-    )
-
-    return joined.select(
-        "replay_trip_id",
-        "pickup_ts",
-        "dropoff_ts",
-        "pickup_epoch_ms",
-        "dropoff_epoch_ms",
-        "pickup_date",
-        "year",
-        "month",
-        "year_month",
-        "hour",
-        PICKUP_ID_COL,
-        "pickup_zone",
-        "pickup_borough",
-        "pickup_lon",
-        "pickup_lat",
-        DROPOFF_ID_COL,
-        "dropoff_zone",
-        "dropoff_borough",
-        "dropoff_lon",
-        "dropoff_lat",
-        "route_key",
-        "route_name",
-        "trip_duration_min",
-        TRIP_DISTANCE_COL,
-        TOTAL_AMOUNT_COL,
-    )
+def build_od_flow_year_month_by_borough(trip_df: DataFrame, top_n: int) -> DataFrame:
+    return build_od_flow_year_month_by_borough_from_flows(build_od_flow_year_month_base(trip_df), top_n)
 
 
 def write_output_table(df: DataFrame, table_name: str, write_csv: bool) -> None:
@@ -513,12 +482,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build map flow analytics tables")
     parser.add_argument("--trip-input", default=TRIP_ENRICHED_PATH)
     parser.add_argument("--zone-hour-input", default=ZONE_HOUR_FEATURES_PATH)
-    parser.add_argument("--centroids-csv", type=Path, default=DEFAULT_CENTROIDS_CSV)
     parser.add_argument("--write-csv", action="store_true")
     parser.add_argument("--flow-top-n", type=int, default=500)
-    parser.add_argument("--replay-sample-size", type=int, default=5000)
-    parser.add_argument("--replay-seed", type=int, default=42)
-    parser.add_argument("--skip-replay", action="store_true")
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        help="Write only these output table names.",
+    )
+    parser.add_argument(
+        "--preview-rows",
+        type=int,
+        default=0,
+        help="Show this many rows before writing each table. Defaults to 0 to avoid extra Spark jobs.",
+    )
     args = parser.parse_args()
 
     spark = create_spark_session(f"{ANALYTICS_APP_NAME} - Map Flow")
@@ -528,28 +504,38 @@ def main() -> None:
     validate_input_schema(trip_df, TRIP_REQUIRED_COLUMNS, "trip_enriched")
     validate_input_schema(zone_hour_df, ZONE_HOUR_REQUIRED_COLUMNS, "zone_hour_features")
 
-    dropoff_zone_hour = build_dropoff_zone_hour_features(trip_df).cache()
+    dropoff_zone_hour = build_dropoff_zone_hour_features(trip_df).persist(StorageLevel.DISK_ONLY)
+    od_flow_hour_base = build_od_flow_hour_base(trip_df).persist(StorageLevel.DISK_ONLY)
+    od_flow_year_month_base = build_od_flow_year_month_base(trip_df).persist(StorageLevel.DISK_ONLY)
+
     output_tables = {
         "dropoff_zone_hour_features": dropoff_zone_hour,
         "zone_balance_hour": build_zone_balance_hour(zone_hour_df, dropoff_zone_hour),
-        "od_flow_hour": build_od_flow_hour(trip_df, args.flow_top_n),
-        "od_flow_year_month": build_od_flow_year_month(trip_df, args.flow_top_n),
+        "od_flow_hour": build_od_flow_hour_from_flows(od_flow_hour_base, args.flow_top_n),
+        "od_flow_hour_by_borough": build_od_flow_hour_by_borough_from_flows(od_flow_hour_base, args.flow_top_n),
+        "od_flow_year_month": build_od_flow_year_month_from_flows(od_flow_year_month_base, args.flow_top_n),
+        "od_flow_year_month_by_borough": build_od_flow_year_month_by_borough_from_flows(
+            od_flow_year_month_base,
+            args.flow_top_n,
+        ),
     }
 
-    if not args.skip_replay:
-        centroids_df = load_centroids(spark, args.centroids_csv)
-        output_tables["map_replay_sample"] = build_map_replay_sample(
-            trip_df,
-            centroids_df,
-            args.replay_sample_size,
-            args.replay_seed,
-        )
+    if args.only:
+        wanted = set(args.only)
+        missing = wanted - set(output_tables)
+        if missing:
+            raise ValueError(f"Unknown output table(s): {', '.join(sorted(missing))}")
+        output_tables = {table_name: table_df for table_name, table_df in output_tables.items() if table_name in wanted}
 
     for table_name, table_df in output_tables.items():
         print(f"\n===== Writing {table_name} =====")
-        table_df.show(10, truncate=False)
+        if args.preview_rows > 0:
+            table_df.show(args.preview_rows, truncate=False)
         write_output_table(table_df, table_name, args.write_csv)
 
+    dropoff_zone_hour.unpersist()
+    od_flow_hour_base.unpersist()
+    od_flow_year_month_base.unpersist()
     spark.stop()
     print("\nMap flow analytics completed successfully.")
 
