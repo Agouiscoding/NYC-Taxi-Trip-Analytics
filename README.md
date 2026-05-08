@@ -63,67 +63,7 @@ Kafka and Spark Streaming are not required for this project scope because the
 core problem is historical batch analytics and forecasting. They would be an
 optional extension for real-time trip ingestion or live hotspot monitoring.
 
-## 目前先把代码运行起来，后期有时间还可以做：
-（不清楚往年项目和打分情况，以及别的组大概做成什么样，所以这部分待定）<br>
-1.数据规模从2023-2024扩充到2009-2024<br>
-2.配置hadoop分布式计算，原始数据进 HDFS，Spark 从 HDFS 读，中间结果写回 HDFS 或对象存储（主要工作是在改config/config.py的文件路径）<br>
-3.配置mongodb，对处理后的结果做持久化存储，不是存原始 900 多万条 trip 明细<br>
-4.引入spark stream，把历史数据“伪装成流”（把历史 taxi 数据按时间切成很多小文件，每隔一段时间放一个文件进去），让 Spark 监听这个目录，实时 zone demand monitor和hotspot ranking，相应的dashboard可以动态实时刷新<br>
-5. Kafka，每条新 trip 作为一条事件写进 Kafka topic<br>
-   Lambda，batch path：每天重算全年 zone-hour 表，speed path：实时更新最近 1 小时热点，serving：dashboard 同时展示历史趋势 + 当前热点<br>
-6.引入Vector DB，做“自然语言查询 / 问答助手”（把项目生成的分析结果、摘要、热点结论、forecast summaries 变成文本，再做 embedding，存进 vector DB，然后用户可以问：“What were the busiest zones on weekday mornings?”等系统去向量检索最相关的分析摘要，再返回答案。）<br>
-
-
-## 最终：
-1.raw data 用 parquet / HDFS，做分布式数据存储 + 计算<br>
-2.analytics 用 Spark（这是目前在做的事）<br>
-3.MongoDB 存“最终查询和展示要用的数据”，做 dashboard 或简单 API，MongoDB 很适合查这些聚合结果<br>
-4.引入spark stream实现dashboard动态刷新<br>
-5.引入Vector DB做“问答助手”<br>
-
-## 关于项目迭代操作的代价：
-https://docs.google.com/document/d/1EIMlaebw0aErON3z__H_27MCdqPioUx8vskZsa-7gv4/edit?usp=sharing<br>
-https://docs.google.com/document/d/15kfSA4iyXP1suyadxqXFoSPGlRs9LA3UeAn0fNphR3k/edit?tab=t.0<br>
-
-# Reminder
-
-When developing, do not push code directly to the main branch.<br>
-Everyone should develop and commit changes on a branch named after themselves, then create a pull request to merge into the main branch.<br>
-The main branch should remain as stable and functional as possible.<br>
-
-1. 本地克隆仓库:<br>
-git clone [仓库地址]<br>
-cd NYC-Taxi-Trip-Analytics<br>
-
-2. 创建自己的分支:<br>
-git checkout -b your-branch-name<br>
-如果远程已经有你的分支，就用:<br>
-git checkout your-branch-name<br>
-
-3. 从远程仓库 origin 把最新内容拉到你当前所在的本地分支:<br>
-git pull origin main<br>
-
-4. 在本地文件夹修改代码<br>
-
-5. 在自己分支提交:<br>
-git add .<br>
-git commit -m "xxxxxx"<br>
-git push origin your-branch-name<br>
-
-6. 发起Pull Request, 从你的分支提 PR 到 main<br>
-
-
-7. PR 合并进 main 之后，通知其他人基于最新 main 开发, 其他人应该先同步最新主分支，再从 main 切自己的分支:<br>
-git checkout main<br>
-git pull origin main<br>
-git checkout -b your-branch-name / git checkout your-branch-name<br>
-
-
-
-
 # File Structure
-统一的参数配置文件在config/config.py
-
 ```text
 project/
   README.md
@@ -201,15 +141,15 @@ data/raw/*.parquet
         ↓
 src/ingestion/load_raw_data.py
         ↓
-data/processed/ingestion/ingestion_summary.txt   （summary）
+data/processed/ingestion/ingestion_summary.txt 
         ↓
 src/cleaning/clean_trips.py
         ↓
-data/processed/cleaned_trips/          （清洗后的 parquet）
+data/processed/cleaned_trips/          
         ↓
 src/features/build_zone_hour_features.py
         ↓
-data/processed/zone_hour_features/     （聚合后的 parquet）
+data/processed/zone_hour_features/    
         ↓
 analytics / forecasting scripts
 ```
@@ -233,32 +173,6 @@ lookup table 用来把 LocationID 映射到 zone 和 borough做空间分析（�
 2. 验证 schema，处理跨月份 schema 不一致问题
 3. 输出 summary（Summary saved to:/NYC-Taxi-Trip-Analytics/data/processed/ingestion/ingestion_summary.txt）
 4. 提供稳定的 load_raw_trips() 读取函数
-
-## 接口说明
-下一阶段:<br>
-人2 负责在 clean_trips.py 里重新调用同样的读取逻辑，人2 不直接“读人1 处理完的数据”，而是调用同一套 ingestion 函数逻辑重新读 raw 数据。<br>
-从 data/raw/ 读进来做清洗，输出清洗后的数据到 data/processed/cleaned_trips/<br>
-
-1. 读同一个原始数据目录<br>
-也就是在 clean_trips.py 里：<br>
-from config.config import RAW_DATA_DIR
-
-2. 复用 ingestion 模块里的函数<br>
-人 1 写好的：load_raw_trips()/load_zone_lookup()/normalize_trip_schema()保留在 src/ingestion/load_raw_data.py<br>
-clean_trips.py 里直接 import：from src.ingestion.load_raw_data import load_raw_trips
-
-3. 人2 代码示例“src/cleaning/clean_trips.py”<br>
-Step 1：导入 config 和 ingestion 逻辑<br>
-from config.config import CLEANED_TRIPS_PATH, CLEANING_APP_NAME<br>
-from src.ingestion.load_raw_data import create_spark_session, load_raw_trips<br>
-Step 2：重新读 raw 数据<br>
-spark = create_spark_session(CLEANING_APP_NAME)<br>
-raw_trips_df = load_raw_trips(spark)<br>
-Step 3：做 cleaning<br>
-cleaned_df = ...<br>
-Step 4：写到 processed<br>
-cleaned_df.write.mode("overwrite").parquet(CLEANED_TRIPS_PATH)<br>
-
 
 ## Schema Summary
 
