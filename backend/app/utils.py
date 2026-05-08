@@ -18,11 +18,3 @@ def response(data: Any, **meta: Any) -> dict[str, Any]:
         "data": data,
         "meta": compact_meta(count=len(data) if isinstance(data, list) else None, **meta),
     }
-
-
-def year_query(year: int | None) -> dict[str, Any]:
-    return {"year": year} if year is not None else {}
-
-
-def borough_query(field: str, borough: str | None) -> dict[str, Any]:
-    return {field: borough} if borough else {}

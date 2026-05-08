@@ -81,9 +81,9 @@ function render() {
 
   const x = d3.scaleBand().domain(xDomain).range([0, innerWidth]).padding(0.04);
   const y = d3.scaleBand().domain(yDomain).range([0, innerHeight]).padding(0.06);
-  const color = d3
-    .scaleSequential(d3.interpolateRgbBasis(["#111827", "#4dd6ff", "#ffd23f", "#ff5d8f"]))
-    .domain([0, d3.max(rows, (row) => row.__value) || 1]);
+  const maxValue = d3.max(rows, (row) => row.__value) || 1;
+  const intensity = d3.scaleSqrt().domain([0, maxValue]).range([0, 1]);
+  const color = d3.interpolateRgbBasis(["#121a28", "#1e5f78", "#4dd6ff", "#ffd23f", "#ff5d8f"]);
   const tooltip = d3.select(root.value).append("div").attr("class", "chart-tooltip");
   const svg = d3.select(root.value).append("svg").attr("viewBox", `0 0 ${width} ${height}`);
   const plot = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
@@ -98,8 +98,11 @@ function render() {
     .attr("y", (row) => y(row[props.yKey]))
     .attr("width", x.bandwidth())
     .attr("height", y.bandwidth())
-    .attr("rx", 2)
-    .attr("fill", (row) => color(row.__value))
+    .attr("rx", 4)
+    .attr("fill", (row) => color(intensity(row.__value)))
+    .attr("opacity", 0.95)
+    .attr("stroke", "rgba(255,255,255,0.04)")
+    .attr("stroke-width", 0.8)
     .on("mouseenter", function (event, row) {
       d3.select(this).attr("stroke", "#ffd23f").attr("stroke-width", 1.5);
       tooltip
@@ -113,7 +116,7 @@ function render() {
       tooltip.style("left", `${event.offsetX + 14}px`).style("top", `${event.offsetY + 14}px`);
     })
     .on("mouseleave", function () {
-      d3.select(this).attr("stroke", null);
+      d3.select(this).attr("stroke", "rgba(255,255,255,0.04)").attr("stroke-width", 0.8);
       tooltip.style("opacity", 0);
     })
     .append("title")
@@ -128,7 +131,7 @@ function render() {
   plot.append("g").attr("class", "axis").call(d3.axisLeft(y).tickSizeOuter(0));
 }
 
-watch(() => [props.data, props.xKey, props.yKey, props.valueKey], render, { deep: true });
+watch(() => [props.data, props.xKey, props.yKey, props.valueKey, props.height], render, { deep: true });
 
 onMounted(() => {
   render();

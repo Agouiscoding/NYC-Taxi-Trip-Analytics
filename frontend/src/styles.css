@@ -214,13 +214,61 @@ button {
   padding: 10px;
 }
 
-.command-controls label {
+.command-controls--refresh-only {
+  align-self: start;
+  padding: 8px;
+}
+
+.chart-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.chart-filters label {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   color: rgba(255, 255, 255, 0.58);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 850;
   text-transform: uppercase;
+}
+
+.chart-filters select {
+  min-width: 104px;
+  height: 32px;
+  font-size: 0.78rem;
+}
+
+.chart-filters input[type="search"] {
+  min-width: 170px;
+  height: 32px;
+  font-size: 0.78rem;
+}
+
+.limit-filter {
+  display: grid;
+  grid-template-columns: minmax(86px, 0.8fr) minmax(78px, 0.7fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.limit-filter select,
+.limit-filter input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  font-size: 0.78rem;
+}
+
+.limit-filter em {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-style: normal;
+  white-space: nowrap;
 }
 
 select {
@@ -235,7 +283,8 @@ select {
   outline: none;
 }
 
-input[type="search"] {
+input[type="search"],
+input[type="number"] {
   min-width: 180px;
   height: 38px;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -248,12 +297,14 @@ input[type="search"] {
   padding: 0 11px;
 }
 
-input[type="search"]::placeholder {
+input[type="search"]::placeholder,
+input[type="number"]::placeholder {
   color: rgba(135, 146, 164, 0.76);
 }
 
 select:focus,
-input[type="search"]:focus {
+input[type="search"]:focus,
+input[type="number"]:focus {
   border-color: rgba(255, 210, 63, 0.42);
   box-shadow: 0 0 0 3px rgba(255, 210, 63, 0.1);
 }
@@ -816,6 +867,11 @@ svg {
   overflow-x: auto;
 }
 
+.data-table {
+  display: grid;
+  gap: 10px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -853,6 +909,51 @@ tbody tr:hover {
   text-align: right;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.table-pagination__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-pagination__actions strong {
+  min-width: 58px;
+  color: var(--text);
+  text-align: center;
+}
+
+.table-pagination button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.table-pagination button:hover:not(:disabled) {
+  border-color: rgba(255, 210, 63, 0.35);
+  color: var(--taxi);
+}
+
+.table-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .map-explorer {
@@ -900,23 +1001,6 @@ tbody tr:hover {
   background: rgba(255, 210, 63, 0.13);
   color: #ffffff;
   transform: translateY(-1px);
-}
-
-.map-toolbar__meta {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.map-toolbar__meta span {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-warm);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
-  font-weight: 900;
-  padding: 7px 10px;
 }
 
 .map-layout {
@@ -1162,9 +1246,11 @@ tbody tr:hover {
   }
 
   .command-controls,
-  .command-controls label,
-  .command-controls select,
-  .command-controls input,
+  .chart-filters,
+  .chart-filters label,
+  .chart-filters select,
+  .chart-filters input,
+  .limit-filter,
   .command-refresh {
     width: 100%;
   }

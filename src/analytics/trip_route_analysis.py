@@ -98,6 +98,37 @@ TOP_ROUTES_REQUIRED_COLUMNS = [
     "cash_share",
 ]
 
+ROUTE_OUTPUT_COLUMNS = [
+    "scope_borough",
+    "route_rank_in_borough",
+    "route_rank",
+    PICKUP_ID_COL,
+    "pickup_zone",
+    "pickup_borough",
+    "pickup_service_zone",
+    DROPOFF_ID_COL,
+    "dropoff_zone",
+    "dropoff_borough",
+    "dropoff_service_zone",
+    "route_key",
+    "route_name",
+    "trip_count",
+    "active_days",
+    "avg_trips_per_active_day",
+    "first_seen_date",
+    "last_seen_date",
+    "avg_trip_distance",
+    "avg_trip_duration_min",
+    "avg_fare_amount",
+    "avg_total_amount",
+    "total_revenue",
+    "avg_tip_amount",
+    "avg_passenger_count",
+    "avg_speed_mph",
+    "credit_card_share",
+    "cash_share",
+]
+
 
 def validate_input_schema(df: DataFrame, required_cols: list[str], table_name: str) -> None:
     missing_cols = [col_name for col_name in required_cols if col_name not in df.columns]
@@ -342,39 +373,34 @@ def build_route_borough_matrix(routes_df: DataFrame) -> DataFrame:
 
 
 def build_top_routes_overall(routes_df: DataFrame, top_n: int) -> DataFrame:
-    selected_cols = [
-        "route_rank",
-        PICKUP_ID_COL,
-        "pickup_zone",
-        "pickup_borough",
-        "pickup_service_zone",
-        DROPOFF_ID_COL,
-        "dropoff_zone",
-        "dropoff_borough",
-        "dropoff_service_zone",
-        "route_key",
-        "route_name",
-        "trip_count",
-        "active_days",
-        "avg_trips_per_active_day",
-        "first_seen_date",
-        "last_seen_date",
-        "avg_trip_distance",
-        "avg_trip_duration_min",
-        "avg_fare_amount",
-        "avg_total_amount",
-        "total_revenue",
-        "avg_tip_amount",
-        "avg_passenger_count",
-        "avg_speed_mph",
-        "credit_card_share",
-        "cash_share",
-    ]
-
     return (
-        routes_df.select(*[col_name for col_name in selected_cols if col_name in routes_df.columns])
+        routes_df.select(*[col_name for col_name in ROUTE_OUTPUT_COLUMNS if col_name in routes_df.columns])
         .orderBy("route_rank", F.desc("trip_count"), F.desc("total_revenue"))
         .limit(top_n)
+    )
+
+
+def add_route_scope_borough(routes_df: DataFrame) -> DataFrame:
+    return (
+        routes_df.withColumn(
+            "scope_borough",
+            F.explode(F.array_distinct(F.array(F.col("pickup_borough"), F.col("dropoff_borough")))),
+        )
+        .filter(F.col("scope_borough").isNotNull())
+        .filter(F.col("scope_borough") != "")
+    )
+
+
+def build_top_routes_by_borough(routes_df: DataFrame, top_n: int) -> DataFrame:
+    rank_window = Window.partitionBy("scope_borough").orderBy(F.desc("trip_count"), F.desc("total_revenue"))
+    ranked = (
+        add_route_scope_borough(routes_df)
+        .withColumn("route_rank_in_borough", F.dense_rank().over(rank_window))
+        .filter(F.col("route_rank_in_borough") <= top_n)
+    )
+    return (
+        ranked.select(*[col_name for col_name in ROUTE_OUTPUT_COLUMNS if col_name in ranked.columns])
+        .orderBy("scope_borough", "route_rank_in_borough")
     )
 
 
@@ -386,6 +412,19 @@ def build_top_inter_borough_routes(routes_df: DataFrame, top_n: int) -> DataFram
     )
 
 
+def build_top_inter_borough_routes_by_borough(routes_df: DataFrame, top_n: int) -> DataFrame:
+    scoped = add_route_scope_borough(routes_df.filter(F.col("pickup_borough") != F.col("dropoff_borough")))
+    rank_window = Window.partitionBy("scope_borough").orderBy(F.desc("trip_count"), F.desc("total_revenue"))
+    ranked = (
+        scoped.withColumn("route_rank_in_borough", F.dense_rank().over(rank_window))
+        .filter(F.col("route_rank_in_borough") <= top_n)
+    )
+    return (
+        ranked.select(*[col_name for col_name in ROUTE_OUTPUT_COLUMNS if col_name in ranked.columns])
+        .orderBy("scope_borough", "route_rank_in_borough")
+    )
+
+
 def build_top_airport_routes(routes_df: DataFrame, top_n: int) -> DataFrame:
     pickup_airport = (F.col("pickup_service_zone") == "Airports") | (F.col("pickup_borough") == "EWR")
     dropoff_airport = (F.col("dropoff_service_zone") == "Airports") | (F.col("dropoff_borough") == "EWR")
@@ -394,6 +433,21 @@ def build_top_airport_routes(routes_df: DataFrame, top_n: int) -> DataFrame:
         routes_df.filter(pickup_airport | dropoff_airport)
         .orderBy(F.desc("trip_count"), F.desc("total_revenue"))
         .limit(top_n)
+    )
+
+
+def build_top_airport_routes_by_borough(routes_df: DataFrame, top_n: int) -> DataFrame:
+    pickup_airport = (F.col("pickup_service_zone") == "Airports") | (F.col("pickup_borough") == "EWR")
+    dropoff_airport = (F.col("dropoff_service_zone") == "Airports") | (F.col("dropoff_borough") == "EWR")
+    scoped = add_route_scope_borough(routes_df.filter(pickup_airport | dropoff_airport))
+    rank_window = Window.partitionBy("scope_borough").orderBy(F.desc("trip_count"), F.desc("total_revenue"))
+    ranked = (
+        scoped.withColumn("route_rank_in_borough", F.dense_rank().over(rank_window))
+        .filter(F.col("route_rank_in_borough") <= top_n)
+    )
+    return (
+        ranked.select(*[col_name for col_name in ROUTE_OUTPUT_COLUMNS if col_name in ranked.columns])
+        .orderBy("scope_borough", "route_rank_in_borough")
     )
 
 
@@ -503,6 +557,17 @@ def main() -> None:
         default=1000,
         help="Minimum route trip count for route efficiency and tip rankings.",
     )
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        help="Write only these output table names.",
+    )
+    parser.add_argument(
+        "--preview-rows",
+        type=int,
+        default=0,
+        help="Show this many rows before writing each table. Defaults to 0 to avoid extra Spark jobs.",
+    )
 
     args = parser.parse_args()
 
@@ -538,8 +603,11 @@ def main() -> None:
         "trip_behavior_by_hour": build_trip_behavior_by_hour(trip_df),
         "route_borough_matrix": build_route_borough_matrix(top_routes_df),
         "top_routes_overall": build_top_routes_overall(top_routes_df, args.top_n),
+        "top_routes_by_borough": build_top_routes_by_borough(top_routes_df, args.top_n),
         "top_inter_borough_routes": build_top_inter_borough_routes(top_routes_df, args.top_n),
+        "top_inter_borough_routes_by_borough": build_top_inter_borough_routes_by_borough(top_routes_df, args.top_n),
         "top_airport_routes": build_top_airport_routes(top_routes_df, args.top_n),
+        "top_airport_routes_by_borough": build_top_airport_routes_by_borough(top_routes_df, args.top_n),
         "route_efficiency_ranking": build_route_efficiency_ranking(
             top_routes_df,
             args.top_n,
@@ -553,9 +621,17 @@ def main() -> None:
         "route_concentration": build_route_concentration(top_routes_df),
     }
 
+    if args.only:
+        wanted = set(args.only)
+        missing = wanted - set(output_tables)
+        if missing:
+            raise ValueError(f"Unknown output table(s): {', '.join(sorted(missing))}")
+        output_tables = {table_name: table_df for table_name, table_df in output_tables.items() if table_name in wanted}
+
     for table_name, table_df in output_tables.items():
         print(f"\n===== Writing {table_name} =====")
-        table_df.show(20, truncate=False)
+        if args.preview_rows > 0:
+            table_df.show(args.preview_rows, truncate=False)
         write_output_table(table_df, table_name, args.write_csv)
 
     spark.stop()

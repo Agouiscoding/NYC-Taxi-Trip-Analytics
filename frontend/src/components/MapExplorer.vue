@@ -14,11 +14,7 @@
         </button>
       </div>
 
-      <div class="map-toolbar__meta">
-        <span>{{ selectedYear || "All years" }}</span>
-        <span>{{ selectedBorough || "All boroughs" }}</span>
-        <span>{{ String(selectedHour).padStart(2, "0") }}:00</span>
-      </div>
+      <ChartFilters :controls="explorerControls" @update:control="updateExplorerControl" />
     </div>
 
     <div v-if="localError" class="error-banner map-error">{{ localError }}</div>
@@ -37,7 +33,7 @@
         <RouteFlowMap
           v-else
           :routes="flowRows"
-          :limit="80"
+          :limit="flowMapLimit"
           :height="620"
           @select-route="selectRoute"
         />
@@ -90,7 +86,7 @@
       </ChartPanel>
 
       <ChartPanel title="OD Flow Ranking" eyebrow="Selected hour">
-        <DataTable :rows="flowRows" :columns="flowColumns" :limit="10" />
+        <DataTable :rows="flowRows" :columns="flowColumns" :limit="500" paginated :page-size="25" />
       </ChartPanel>
 
       <ChartPanel class="span-2" title="Route Concentration" eyebrow="Pareto curve">
@@ -115,6 +111,7 @@ import HorizontalBarChart from "@/components/charts/HorizontalBarChart.vue";
 import LineChart from "@/components/charts/LineChart.vue";
 import RouteFlowMap from "@/components/charts/RouteFlowMap.vue";
 import TaxiZoneMap from "@/components/charts/TaxiZoneMap.vue";
+import ChartFilters from "@/components/layout/ChartFilters.vue";
 import ChartPanel from "@/components/layout/ChartPanel.vue";
 import { compact, decimal, integer, money, pct } from "@/utils/format";
 
@@ -139,7 +136,21 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  yearOptions: {
+    type: Array,
+    default: () => [],
+  },
+  boroughOptions: {
+    type: Array,
+    default: () => [],
+  },
+  hourOptions: {
+    type: Array,
+    default: () => [],
+  },
 });
+
+const emit = defineEmits(["update:selectedYear", "update:selectedBorough", "update:selectedHour"]);
 
 const mapModes = [
   { key: "pickup", label: "Pickup", icon: MapPinned },
@@ -152,12 +163,55 @@ const activeMode = ref("pickup");
 const loading = ref(false);
 const localError = ref("");
 const zoneProfiles = ref([]);
-const routeProfiles = ref([]);
 const flowHour = ref([]);
 const flowMonth = ref([]);
+const flowMapLimit = ref(100);
 const routeConcentration = ref([]);
 const selectedZoneProfile = ref(null);
 const selectedRouteProfile = ref(null);
+
+const flowLimitOptions = [10, 25, 50, 100, 250, 500].map((value) => ({ label: String(value), value }));
+
+const explorerControls = computed(() => {
+  const controls = [
+    {
+      key: "selectedYear",
+      label: "Year",
+      options: props.yearOptions,
+      value: props.selectedYear,
+      valueType: "number",
+    },
+    {
+      key: "selectedBorough",
+      label: "Borough",
+      options: props.boroughOptions,
+      value: props.selectedBorough,
+    },
+    {
+      key: "selectedHour",
+      label: "Hour",
+      options: props.hourOptions,
+      value: props.selectedHour,
+      valueType: "number",
+    },
+  ];
+
+  if (activeMode.value === "flow") {
+    controls.push({
+      key: "flowMapLimit",
+      label: "Map lines",
+      type: "limit",
+      min: 10,
+      max: 500,
+      step: 1,
+      options: flowLimitOptions,
+      value: flowMapLimit.value,
+      valueType: "number",
+    });
+  }
+
+  return controls;
+});
 
 const flowRows = computed(() => {
   const rows = flowHour.value.length ? flowHour.value : flowMonth.value;
@@ -221,7 +275,14 @@ const flowColumns = [
     key: "route_rank_in_hour",
     label: "Rank",
     numeric: true,
-    format: (value, row) => integer(value || row.route_rank_in_year_month || row.route_rank),
+    format: (value, row) =>
+      integer(
+        row.route_rank_in_borough_hour ||
+          row.route_rank_in_borough_year_month ||
+          value ||
+          row.route_rank_in_year_month ||
+          row.route_rank
+      ),
   },
   { key: "route_name", label: "Route" },
   { key: "trip_count", label: "Trips", numeric: true, format: integer },
@@ -237,6 +298,30 @@ function formatHour(value) {
   return `${String(hour).padStart(2, "0")}:00`;
 }
 
+function updateExplorerControl(key, value) {
+  if (key === "flowMapLimit") {
+    flowMapLimit.value = clampFlowLimit(value);
+    return;
+  }
+
+  const eventNames = {
+    selectedYear: "update:selectedYear",
+    selectedBorough: "update:selectedBorough",
+    selectedHour: "update:selectedHour",
+  };
+
+  emit(eventNames[key], value);
+}
+
+function clampFlowLimit(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 500;
+  }
+
+  return Math.min(500, Math.max(10, parsed));
+}
+
 async function loadExplorerData() {
   loading.value = true;
   localError.value = "";
@@ -244,24 +329,21 @@ async function loadExplorerData() {
   try {
     const [
       zoneResult,
-      routeResult,
       flowHourResult,
       flowMonthResult,
       concentrationResult,
     ] = await Promise.all([
       api.zoneProfiles({ borough: props.selectedBorough || null, limit: 300 }),
-      api.routeProfiles({ pickup_borough: props.selectedBorough || null, limit: 300 }),
-      api.mapOdFlowHour({ hour: props.selectedHour, borough: props.selectedBorough || null, limit: 500 }),
+      api.mapOdFlowHour({ hour: props.selectedHour, borough: props.selectedBorough || null, limit: flowMapLimit.value }),
       api.mapOdFlowYearMonth({
         year: props.selectedYear,
         borough: props.selectedBorough || null,
-        limit: 500,
+        limit: flowMapLimit.value,
       }),
       api.routeConcentration({ limit: 500 }),
     ]);
 
     zoneProfiles.value = zoneResult.data || [];
-    routeProfiles.value = routeResult.data || [];
     flowHour.value = flowHourResult.data || [];
     flowMonth.value = flowMonthResult.data || [];
     routeConcentration.value = concentrationResult.data || [];
@@ -308,7 +390,7 @@ async function selectRoute(route) {
   }
 }
 
-watch(() => [props.selectedYear, props.selectedBorough, props.selectedHour, props.refreshKey], loadExplorerData);
+watch(() => [props.selectedYear, props.selectedBorough, props.selectedHour, props.refreshKey, flowMapLimit.value], loadExplorerData);
 
 onMounted(loadExplorerData);
 </script>

@@ -135,7 +135,15 @@ async function render() {
         .style("opacity", 1)
         .html(
           `<strong>${route.route_name}</strong>
-          <span>Rank ${route.route_rank || route.route_rank_in_hour || route.route_rank_in_year_month || "-"}</span>
+          <span>Rank ${
+            route.route_rank_in_borough ||
+            route.route_rank_in_borough_hour ||
+            route.route_rank_in_borough_year_month ||
+            route.route_rank_in_hour ||
+            route.route_rank_in_year_month ||
+            route.route_rank ||
+            "-"
+          }</span>
           <b>${d3.format(",")(Number(route.trip_count))} trips</b>
           <span>$${d3.format(",.0f")(Number(route.total_revenue || 0))} revenue</span>`
         );
